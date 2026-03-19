@@ -20,6 +20,8 @@ import com.badlogic.gdx.backends.android.AndroidFragmentApplication
 import com.genesys.v1.codebase.R
 import com.wave.livewallpaper.libgdx.GenericAppListener
 import com.wave.livewallpaper.libgdx.LibGdxLiveWallpaper
+import com.wave.livewallpaper.libgdx.LibGdxLiveWallpaperAlternate
+import com.wave.livewallpaper.WallpaperSelectionManager
 
 class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication.Callbacks {
 
@@ -141,12 +143,20 @@ class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication
 
     private fun applyWallpaper() {
         try {
-            // Always use the main LibGdxLiveWallpaper service
-            // The wallpaper selection is managed by WallpaperSelectionManager
+            val wallpaperPath = intent.getStringExtra(EXTRA_WALLPAPER_PATH) ?: return
+            
+            // Determine which service to use based on the wallpaper path
+            val wallpaperId = WallpaperSelectionManager.getWallpaperIdFromPath(wallpaperPath)
+            val serviceClass = if (wallpaperId == WallpaperSelectionManager.WALLPAPER_GOLDFISH) {
+                LibGdxLiveWallpaperAlternate::class.java
+            } else {
+                LibGdxLiveWallpaper::class.java
+            }
+
             val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
                 putExtra(
                     WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                    ComponentName(this@WallpaperPreviewActivity, LibGdxLiveWallpaper::class.java)
+                    ComponentName(this@WallpaperPreviewActivity, serviceClass)
                 )
             }
             startActivityForResult(intent, REQUEST_SET_WALLPAPER)
@@ -163,51 +173,6 @@ class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication
         }
     }
 
-    override fun onPause() {
-        Log.d(TAG, "onPause() called")
-        // Dispose fragment properly before pausing to avoid ANR
-        try {
-            gdxFragment?.let { fragment ->
-                if (fragment.isAdded) {
-                    supportFragmentManager.beginTransaction()
-                        .remove(fragment)
-                        .commitAllowingStateLoss()
-                }
-            }
-            gdxFragment = null
-        } catch (e: Exception) {
-            Log.e(TAG, "Error removing fragment in onPause", e)
-        }
-        
-        try {
-            super.onPause()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in onPause", e)
-        }
-    }
-
-    override fun onDestroy() {
-        Log.d(TAG, "onDestroy() called")
-        try {
-            gdxFragment?.let { fragment ->
-                if (fragment.isAdded) {
-                    supportFragmentManager.beginTransaction()
-                        .remove(fragment)
-                        .commitAllowingStateLoss()
-                }
-            }
-            gdxFragment = null
-        } catch (e: Exception) {
-            Log.e(TAG, "Error cleaning up fragment", e)
-        }
-        
-        try {
-            super.onDestroy()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in onDestroy", e)
-        }
-    }
-
     @Deprecated("Use Activity Result API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -221,6 +186,5 @@ class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication
 
     override fun exit() {
         // Required by AndroidFragmentApplication.Callbacks
-        finish()
     }
 }

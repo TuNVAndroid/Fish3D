@@ -14,6 +14,7 @@ import com.genesys.v1.codebase.presenter.components.wallpaperpreview.WallpaperPr
 import com.wave.livewallpaper.WallpaperPlaybackManager
 import com.wave.livewallpaper.WallpaperSelectionManager
 import com.wave.livewallpaper.libgdx.LibGdxLiveWallpaper
+import com.wave.livewallpaper.libgdx.LibGdxLiveWallpaperAlternate
 
 class MainActivity : BaseActivity<ActivityMainBinding>() {
 
@@ -26,11 +27,14 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         private const val REQUEST_SET_WALLPAPER = 1002
     }
 
+    private lateinit var wallpaperSelectionManager: WallpaperSelectionManager
+
     override fun getLazyViewBinding(): Lazy<ActivityMainBinding> = lazy<ActivityMainBinding> {
         DataBindingUtil.setContentView(this, R.layout.activity_main)
     }
 
     override fun initViews(savedInstanceState: Bundle?) {
+        wallpaperSelectionManager = WallpaperSelectionManager(this)
         loadPreviewImage(ASSETS_CLOWNFISH, viewBinding.ivPreviewGltf)
         loadPreviewImage(ASSETS_GOLDFISH, viewBinding.ivPreviewG3db)
     }
@@ -68,6 +72,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     private fun openPreview(assetsPath: String) {
         val assetsDir = prepareWallpaperAssets(assetsPath)
         if (assetsDir != null) {
+            // Set the selected wallpaper so preview knows which one to show
+            val wallpaperId = WallpaperSelectionManager.getWallpaperIdFromPath(assetsPath)
+            wallpaperSelectionManager.setSelectedWallpaper(wallpaperId, assetsDir)
+            
             WallpaperPreviewActivity.launch(this, assetsDir)
         } else {
             Toast.makeText(this, R.string.wallpaper_set_failed, Toast.LENGTH_SHORT).show()
@@ -109,43 +117,36 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         try {
             val prepared = prepareWallpaperAssets(assetsPath)
             if (prepared != null) {
-                // Use WallpaperSelectionManager to manage wallpaper selection
-                val selectionManager = WallpaperSelectionManager(applicationContext)
+                // Determine wallpaper ID and service class based on assets path
                 val wallpaperId = WallpaperSelectionManager.getWallpaperIdFromPath(assetsPath)
-                
-                // Set the selected wallpaper
-                selectionManager.setSelectedWallpaper(wallpaperId, prepared)
-                
-                // Log for debugging
-                android.util.Log.d("MainActivity", "Wallpaper selected: $wallpaperId -> $prepared")
-            } else {
-                Toast.makeText(this, "Failed to prepare wallpaper assets", Toast.LENGTH_SHORT).show()
-                return
-            }
-
-            // Always use the main LibGdxLiveWallpaper service
-            val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-                putExtra(
-                    WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                    ComponentName(this@MainActivity, LibGdxLiveWallpaper::class.java)
-                )
-            }
-            
-            // Check if the intent can be resolved
-            if (intent.resolveActivity(packageManager) != null) {
-                startActivityForResult(intent, REQUEST_SET_WALLPAPER)
-            } else {
-                // Fallback to wallpaper chooser
-                val fallbackIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
-                if (fallbackIntent.resolveActivity(packageManager) != null) {
-                    startActivityForResult(fallbackIntent, REQUEST_SET_WALLPAPER)
+                val serviceClass = if (wallpaperId == WallpaperSelectionManager.WALLPAPER_GOLDFISH) {
+                    LibGdxLiveWallpaperAlternate::class.java
                 } else {
-                    Toast.makeText(this, R.string.wallpaper_set_failed, Toast.LENGTH_SHORT).show()
+                    LibGdxLiveWallpaper::class.java
                 }
+
+                // Use WallpaperSelectionManager to properly set the selected wallpaper
+                wallpaperSelectionManager.setSelectedWallpaper(wallpaperId, prepared)
+
+                // Also save to legacy shared preferences for backward compatibility
+                val prefs = getSharedPreferences("wallpaper_prefs", MODE_PRIVATE)
+                prefs.edit().putString("wallpaper_disk_path", prepared).apply()
+
+                val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                    putExtra(
+                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        ComponentName(this@MainActivity, serviceClass)
+                    )
+                }
+                startActivityForResult(intent, REQUEST_SET_WALLPAPER)
             }
         } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Error setting wallpaper", e)
-            Toast.makeText(this, R.string.wallpaper_set_failed, Toast.LENGTH_SHORT).show()
+            try {
+                val fallbackIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
+                startActivityForResult(fallbackIntent, REQUEST_SET_WALLPAPER)
+            } catch (e2: Exception) {
+                Toast.makeText(this, R.string.wallpaper_set_failed, Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

@@ -8,8 +8,8 @@
   "spawnYStart": 0,
   "spawnYIncrement": 100,
   "floorPosX": 0,
-  "floorPosY": 0,
+  "floorPosY": -300,
   "floorPosZ": 0,
-  "floorRotationX": -25,
+  "floorRotationX": 0,
   "floorRotationY": 0
 }

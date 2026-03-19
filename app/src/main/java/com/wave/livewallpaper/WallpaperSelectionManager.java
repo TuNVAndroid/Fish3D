@@ -42,8 +42,12 @@ public class WallpaperSelectionManager {
             .putString(KEY_WALLPAPER_PATH_PREFIX + wallpaperId, wallpaperPath)
             .apply();
             
-        // Also update the legacy database for compatibility
-        WallpaperPlaybackManager.setDbValue(context, "wallpaper_disk_path", wallpaperPath);
+        // Set the appropriate database key based on wallpaper type
+        if (WALLPAPER_GOLDFISH.equals(wallpaperId)) {
+            WallpaperPlaybackManager.setDbValue(context, "wallpaper_disk_path_alternate", wallpaperPath);
+        } else {
+            WallpaperPlaybackManager.setDbValue(context, "wallpaper_disk_path", wallpaperPath);
+        }
         WallpaperPlaybackManager.setDbValue(context, "selected_wallpaper_type", wallpaperId);
     }
     
@@ -51,7 +55,9 @@ public class WallpaperSelectionManager {
      * Get the currently selected wallpaper ID
      */
     public String getSelectedWallpaperId() {
-        return prefs.getString(KEY_SELECTED_WALLPAPER_ID, WALLPAPER_CLOWNFISH);
+        String wallpaperId = prefs.getString(KEY_SELECTED_WALLPAPER_ID, WALLPAPER_CLOWNFISH);
+        Log.d(TAG, "getSelectedWallpaperId: " + wallpaperId);
+        return wallpaperId;
     }
     
     /**
@@ -122,11 +128,13 @@ public class WallpaperSelectionManager {
      * Get wallpaper ID from assets path
      */
     public static String getWallpaperIdFromPath(String path) {
-        if (path.contains(ASSETS_CLOWNFISH)) {
+        if (path.contains(ASSETS_CLOWNFISH) || path.contains("clownfishes")) {
             return WALLPAPER_CLOWNFISH;
-        } else if (path.contains(ASSETS_GOLDFISH)) {
+        } else if (path.contains(ASSETS_GOLDFISH) || path.contains("livefisheslivewallpaper")) {
             return WALLPAPER_GOLDFISH;
         }
+        // Log warning for unknown path
+        Log.w("WallpaperSelectionManager", "Unknown wallpaper path: " + path + ", defaulting to clownfish");
         return WALLPAPER_CLOWNFISH; // default
     }
     

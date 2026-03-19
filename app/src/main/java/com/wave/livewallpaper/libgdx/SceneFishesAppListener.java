@@ -31,6 +31,7 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.utils.Array;
 import com.wave.keyboard.theme.utils.FirebaseHelper;
+import com.wave.livewallpaper.WallpaperSelectionManager;
 import com.wave.livewallpaper.data.LiveWallpaperConfig;
 import com.wave.livewallpaper.data.LiveWallpaperConfigReader;
 import com.wave.livewallpaper.data.SceneConfig;
@@ -450,36 +451,77 @@ public class SceneFishesAppListener extends BaseAppListener {
     }
 
     private void initScene() {
-        ModelInstance modelInstance = new ModelInstance(getModel("BG"));
-        this.backgroundModel = modelInstance;
-        modelInstance.transform.translate(this.floorPosX, this.floorPosY, this.floorPosZ);
-        this.backgroundModel.transform.rotate(1.0f, 0.0f, 0.0f, this.floorRotationX);
-        this.backgroundModel.transform.rotate(0.0f, 1.0f, 0.0f, this.floorRotationY);
+        Model bgModel = getModel("BG");
+        if (bgModel != null) {
+            ModelInstance modelInstance = new ModelInstance(bgModel);
+            this.backgroundModel = modelInstance;
+            
+            // Get wallpaper type to apply appropriate scaling and positioning
+            String wallpaperType = WallpaperSelectionManager.getWallpaperIdFromPath(this.wallpaperDiskPath);
+            
+            if (WallpaperSelectionManager.WALLPAPER_GOLDFISH.equals(wallpaperType)) {
+                // Goldfish wallpaper - use original scale
+                modelInstance.transform.translate(this.floorPosX, this.floorPosY, this.floorPosZ);
+                Log.d("SceneFishes", "Goldfish background - original scale");
+            } else {
+                // Clownfish wallpaper - needs different positioning
+                modelInstance.transform.scl(1.0f, 1.0f, 1.0f); // Keep original scale
+                modelInstance.transform.translate(this.floorPosX, this.floorPosY - 100, this.floorPosZ);
+                Log.d("SceneFishes", "Clownfish background - adjusted position");
+            }
+            
+            this.backgroundModel.transform.rotate(1.0f, 0.0f, 0.0f, this.floorRotationX);
+            this.backgroundModel.transform.rotate(0.0f, 1.0f, 0.0f, this.floorRotationY);
+            
+            Log.d("SceneFishes", "Background model loaded for " + wallpaperType + 
+                  " at position: " + this.floorPosX + ", " + this.floorPosY + ", " + this.floorPosZ + 
+                  " with materials: " + bgModel.materials.size);
+        } else {
+            Log.e("SceneFishes", "Failed to load BG model - model is null");
+        }
+        
         float f2 = this.spawnYStart;
         for (FishResource fishResource : this.fishResources) {
-            this.idleFishes.add(new Fish(getModel(fishResource.modelName), getModel(fishResource.shadowModelName), f2));
-            f2 += this.spawnYIncrement;
+            Model fishModel = getModel(fishResource.modelName);
+            Model shadowModel = getModel(fishResource.shadowModelName);
+            if (fishModel != null) {
+                this.idleFishes.add(new Fish(fishModel, shadowModel, f2));
+                f2 += this.spawnYIncrement;
+                Log.d("SceneFishes", "Fish model loaded: " + fishResource.modelName);
+            } else {
+                Log.e("SceneFishes", "Failed to load fish model: " + fishResource.modelName);
+            }
         }
+        Log.d("SceneFishes", "Scene initialized with " + this.idleFishes.size + " fish");
         this.isLoading = false;
     }
 
     private Model getModel(String str) {
         if (this.assetManager.contains(str + ".gltf", SceneAsset.class)) {
-            return ((SceneAsset) this.assetManager.get(str + ".gltf", SceneAsset.class)).scene.model;
+            SceneAsset sceneAsset = (SceneAsset) this.assetManager.get(str + ".gltf", SceneAsset.class);
+            Log.d("SceneFishes", "Loaded GLTF model: " + str + ".gltf");
+            return sceneAsset.scene.model;
         }
-        if (!this.assetManager.contains(str + ".g3db", Model.class)) {
-            return null;
+        if (this.assetManager.contains(str + ".g3db", Model.class)) {
+            Model model = (Model) this.assetManager.get(str + ".g3db", Model.class);
+            Log.d("SceneFishes", "Loaded G3DB model: " + str + ".g3db");
+            return model;
         }
-        return (Model) this.assetManager.get(str + ".g3db", Model.class);
+        Log.e("SceneFishes", "Model not found: " + str + " (checked both .gltf and .g3db)");
+        return null;
     }
 
     private void loadModel(String str) {
         if (this.fileHandleResolver.resolve(str + ".gltf").exists()) {
             this.assetManager.load(str + ".gltf", SceneAsset.class);
+            Log.d("SceneFishes", "Loading GLTF model: " + str + ".gltf");
             return;
         }
         if (this.fileHandleResolver.resolve(str + ".g3db").exists()) {
             this.assetManager.load(str + ".g3db", Model.class);
+            Log.d("SceneFishes", "Loading G3DB model: " + str + ".g3db");
+        } else {
+            Log.e("SceneFishes", "Model file not found: " + str + " (checked both .gltf and .g3db)");
         }
     }
 
@@ -549,6 +591,11 @@ public class SceneFishesAppListener extends BaseAppListener {
         this.sceneFrameBuffer.begin();
         Gdx.gl.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         Gdx.gl.glClear(16640);
+        
+        // Debug GL state
+        Log.v("SceneFishes", "GL depth test enabled: " + Gdx.gl.glIsEnabled(GL20.GL_DEPTH_TEST));
+        Log.v("SceneFishes", "GL cull face enabled: " + Gdx.gl.glIsEnabled(GL20.GL_CULL_FACE));
+        
         ModelBatch modelBatch = this.defaultBatch;
         if (this.shadowQuality > 0) {
             Array.ArrayIterator it = this.sceneShaders.iterator();
@@ -567,7 +614,23 @@ public class SceneFishesAppListener extends BaseAppListener {
         modelBatch.begin(this.sceneCamera);
         ModelInstance modelInstance3 = this.backgroundModel;
         if (modelInstance3 != null) {
-            modelBatch.render(modelInstance3);
+            // Debug texture information
+            if (modelInstance3.materials.size > 0) {
+                Log.v("SceneFishes", "Background materials count: " + modelInstance3.materials.size);
+                for (int i = 0; i < modelInstance3.materials.size; i++) {
+                    Material mat = modelInstance3.materials.get(i);
+                    Log.v("SceneFishes", "Material " + i + ": " + mat.id + " with " + mat.size() + " attributes");
+                }
+            }
+            
+            // Disable depth writing for background to prevent z-fighting
+            Gdx.gl.glDepthMask(false);
+            modelBatch.render(modelInstance3, this.environment);
+            Gdx.gl.glDepthMask(true);
+            
+            Log.v("SceneFishes", "Background rendered with environment");
+        } else {
+            Log.w("SceneFishes", "Background model is null, not rendering");
         }
         modelBatch.end();
         Gdx.gl.glClear(256);
@@ -594,8 +657,8 @@ public class SceneFishesAppListener extends BaseAppListener {
 
     private ShaderProgram compileShader(String str, String str2) {
         ShaderProgram.pedantic = false;
-        String string = Gdx.files.internal("shaders/" + str + "_v.glsl").readString();
-        String string2 = Gdx.files.internal("shaders/" + str + "_f.glsl").readString();
+        String string = this.fileHandleResolver.resolve(str + "_v.glsl").readString();
+        String string2 = this.fileHandleResolver.resolve(str + "_f.glsl").readString();
         StringBuilder sb = new StringBuilder();
         sb.append(str2);
         sb.append(string);
@@ -666,8 +729,11 @@ public class SceneFishesAppListener extends BaseAppListener {
         sceneCam.lookAt(0.0f, 0.0f, 0.0f);
         sceneCam.rotateAround(Vector3.Zero, Vector3.X, this.cameraAngleX);
         sceneCam.near = 1.0f;
-        sceneCam.far = 2000.0f;
+        sceneCam.far = 5000.0f; // Increase far plane to see background better
         sceneCam.update();
+        
+        Log.d("SceneFishes", "Camera setup - Distance: " + this.cameraDistance + 
+              ", Angle: " + this.cameraAngleX + ", Far: " + sceneCam.far);
 
         // Orthographic camera for water overlay
         float screenW = (float) Gdx.graphics.getWidth();
@@ -689,8 +755,8 @@ public class SceneFishesAppListener extends BaseAppListener {
 
         // shadowReceiveBatch — Custom ShaderProvider using scene GLSL, registers programs into sceneShaders
         final SceneFishesAppListener self = this;
-        final String sceneVertSrc = Gdx.files.internal("shaders/scene_v.glsl").readString();
-        final String sceneFragSrc = Gdx.files.internal("shaders/scene_f.glsl").readString();
+        final String sceneVertSrc = this.fileHandleResolver.resolve("scene_v.glsl").readString();
+        final String sceneFragSrc = this.fileHandleResolver.resolve("scene_f.glsl").readString();
         final DefaultShader.Config sceneConfig = new DefaultShader.Config();
         sceneConfig.numBones = 20;
         sceneConfig.vertexShader = sceneVertSrc;
@@ -705,8 +771,8 @@ public class SceneFishesAppListener extends BaseAppListener {
         });
 
         // shadowGenBatch — Custom ShaderProvider using depthmap GLSL, registers programs into depthShaders
-        final String depthVertSrc = Gdx.files.internal("shaders/depthmap_v.glsl").readString();
-        final String depthFragSrc = Gdx.files.internal("shaders/depthmap_f.glsl").readString();
+        final String depthVertSrc = this.fileHandleResolver.resolve("depthmap_v.glsl").readString();
+        final String depthFragSrc = this.fileHandleResolver.resolve("depthmap_f.glsl").readString();
         final DefaultShader.Config depthConfig = new DefaultShader.Config();
         depthConfig.numBones = 20;
         depthConfig.vertexShader = depthVertSrc;
