@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Wallpaper Preview -->
+    <color name="wallpaper_apply_button">#FF1565C0</color>
+    <color name="wallpaper_card_bg">#FF1A1A2E</color>
+    <color name="wallpaper_accent">#FF42A5F5</color>
+    <color name="wallpaper_surface">#FF0F0F23</color>
+    <color name="wallpaper_on_surface">#FFE0E0E0</color>
+</resources>

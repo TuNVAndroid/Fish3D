@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">FishTank</string>
+    <string name="wallpaper_name">Fish Live Wallpaper</string>
+    <string name="wallpaper_description">Beautiful 3D fish live wallpaper</string>
+
+    <!-- Wallpaper Preview -->
+    <string name="wallpaper_preview_title">Live Wallpaper Preview</string>
+    <string name="set_wallpaper">Set Wallpaper</string>
+    <string name="loading_preview">Loading preview…</string>
+    <string name="back">Back</string>
+    <string name="preview_wallpaper">Preview Wallpaper</string>
+    <string name="tap_to_preview">Tap to preview the live wallpaper</string>
+    <string name="wallpaper_set_success">Wallpaper applied successfully!</string>
+    <string name="wallpaper_set_failed">Could not set wallpaper. Please try again.</string>
+    <string name="fish_wallpaper_title">3D Fish Aquarium</string>
+    <string name="fish_wallpaper_subtitle">Animated goldfish swimming in crystal clear water with realistic lighting and shadows</string>
+
+    <!-- Two wallpaper options -->
+    <string name="clownfish_title">Clownfish Aquarium</string>
+    <string name="clownfish_subtitle">6 tropical clownfish • GLTF models</string>
+    <string name="goldfish_title">Goldfish Aquarium</string>
+    <string name="goldfish_subtitle">5 classic goldfish • G3DB models</string>
+    <string name="format_gltf">GLTF</string>
+    <string name="format_g3db">G3DB</string>
+</resources>
