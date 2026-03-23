@@ -113,8 +113,10 @@ public class SceneFishesAppListener extends BaseAppListener {
         private ModelInstance debugArrow;
         private Bait targetBait;  // New: bait that fish is targeting
         private boolean isSeekingBait;  // New: whether fish is actively seeking bait
-        private static final float BAIT_DETECTION_RANGE = 500.0f;  // Greatly increased detection range
-        private static final float BAIT_CONSUME_RANGE = 50.0f;     // Increased consume range
+        private boolean isForcedToBait; // Whether this fish was specifically assigned to a bait
+        private static final float BAIT_DETECTION_RANGE = 200.0f;
+        private static final float BAIT_CONSUME_RANGE = 20.0f; // Closer for more realistic contact
+        private static final float SPEED_OF_FISH_TURNING= 20.0f;
 
         public boolean isOutOfBounds() {
             return this.currentPos.x < SceneFishesAppListener.this.spawnBounds.min.x || this.currentPos.z < SceneFishesAppListener.this.spawnBounds.min.z || this.currentPos.x > SceneFishesAppListener.this.spawnBounds.max.x || this.currentPos.z > SceneFishesAppListener.this.spawnBounds.max.z;
@@ -174,6 +176,14 @@ public class SceneFishesAppListener extends BaseAppListener {
             this.currentSpeed = 350.0f;
         }
 
+        public void forceSeekBait(Bait bait) {
+            this.targetBait = bait;
+            this.isSeekingBait = true;
+            this.isForcedToBait = true;
+            // Give initial speed boost to start moving towards bait
+            this.currentSpeed = Math.max(this.currentSpeed, this.baseSpeed * 2.0f);
+        }
+
         private Bait findNearestBait() {
             Bait nearestBait = null;
             float nearestDistance = Float.MAX_VALUE;
@@ -182,7 +192,11 @@ public class SceneFishesAppListener extends BaseAppListener {
             while (it.hasNext()) {
                 Bait bait = (Bait) it.next();
                 if (!bait.isConsumed()) {
-                    float distance = this.currentPos.dst(bait.getPosition());
+                    // Use XZ distance (2D distance from top view)
+                    float dx = this.currentPos.x - bait.getPosition().x;
+                    float dz = this.currentPos.z - bait.getPosition().z;
+                    float distance = (float) Math.sqrt(dx * dx + dz * dz);
+                    
                     if (distance < BAIT_DETECTION_RANGE && distance < nearestDistance) {
                         nearestDistance = distance;
                         nearestBait = bait;
@@ -197,14 +211,19 @@ public class SceneFishesAppListener extends BaseAppListener {
             if (this.targetBait == null || this.targetBait.isConsumed()) {
                 this.targetBait = findNearestBait();
                 this.isSeekingBait = (this.targetBait != null);
+                this.isForcedToBait = false;
             }
             
             if (this.targetBait != null && !this.targetBait.isConsumed()) {
                 Vector3 baitPos = this.targetBait.getPosition();
-                float distanceToBait = this.currentPos.dst(baitPos);
+                
+                // Calculate XZ distance for accurate interaction from top view
+                float dx = this.currentPos.x - baitPos.x;
+                float dz = this.currentPos.z - baitPos.z;
+                float distanceToBait = (float) Math.sqrt(dx * dx + dz * dz);
                 
                 if (distanceToBait < BAIT_CONSUME_RANGE) {
-                    // Consume the bait
+                    // Head reached the bait - consume it
                     this.targetBait.consume();
                     
                     // Create water ripple at bait position
@@ -212,16 +231,17 @@ public class SceneFishesAppListener extends BaseAppListener {
                     SceneFishesAppListener.this.waterSimulation.addRippleAtScreenPos(
                         screenPos.x, Gdx.graphics.getHeight() - screenPos.y);
                     
-                    // Slow down after eating
+                    // Slow down significantly after eating
                     this.currentSpeed = this.baseSpeed * 0.3f;
                     
                     // Clear target
                     this.targetBait = null;
                     this.isSeekingBait = false;
+                    this.isForcedToBait = false;
                     
-                    Log.d("SceneFishes", "Fish consumed bait");
-                } else if (distanceToBait < BAIT_DETECTION_RANGE) {
-                    // Move towards bait aggressively
+                    Log.d("SceneFishes", "Fish consumed bait accurately");
+                } else if (this.isForcedToBait || distanceToBait < BAIT_DETECTION_RANGE) {
+                    // Turn towards bait and speed up
                     Vector3 direction = new Vector3(baitPos).sub(this.currentPos).nor();
                     float targetHeading = (float) Math.atan2(-direction.z, direction.x);
                     
@@ -229,14 +249,18 @@ public class SceneFishesAppListener extends BaseAppListener {
                     float angleDiff = targetHeading - this.heading;
                     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                    this.heading += angleDiff * 12.0f * deltaTime; // Faster turn rate
                     
-                    // Maintain high speed when seeking bait
-                    this.currentSpeed = Math.max(this.currentSpeed, this.baseSpeed * 3.5f);
+                    // Respond very quickly to direction changes
+                    this.heading += angleDiff * SPEED_OF_FISH_TURNING * deltaTime;
+                    
+                    // Adjust speed based on focus
+                    float boost = this.isForcedToBait ? 4.5f : 3.5f;
+                    this.currentSpeed = Math.max(this.currentSpeed, this.baseSpeed * boost);
                 } else {
-                    // Bait too far, stop seeking
+                    // Bait is too far now and not forced
                     this.targetBait = null;
                     this.isSeekingBait = false;
+                    this.isForcedToBait = false;
                 }
             }
         }
@@ -269,7 +293,13 @@ public class SceneFishesAppListener extends BaseAppListener {
             if (f8 > f9) {
                 f9 = f8;
             }
-            this.currentSpeed = f8 - (f8 * f2);
+            // Faster decay when not seeking bait to avoid long-lasting speed boosts
+            if (!this.isSeekingBait) {
+                this.currentSpeed -= (this.currentSpeed - this.baseSpeed) * 3.0f * f2;
+                if (this.currentSpeed < this.baseSpeed) this.currentSpeed = this.baseSpeed;
+            } else {
+                this.currentSpeed = f8 - (f8 * f2);
+            }
             
             // Only apply random turn rate if not seeking bait
             if (!this.isSeekingBait) {
@@ -279,20 +309,21 @@ public class SceneFishesAppListener extends BaseAppListener {
             
             vector3.x = ((float) Math.cos(this.heading)) * f9 * f2;
             vector3.z = ((float) Math.sin(this.heading)) * (-1.0f) * f9 * f2;
+            
+            // Update position
+            this.currentPos.add(vector3);
+            
             ModelInstance modelInstance2 = this.modelInstance;
             if (modelInstance2 != null) {
-                modelInstance2.transform.rotate(new Vector3(0.0f, 1.0f, 0.0f), -((float) Math.toDegrees(f7 + 1.5707963267948966d)));
-                this.modelInstance.transform.translate(vector3);
-                this.modelInstance.transform.getTranslation(this.currentPos);
-                this.modelInstance.transform.rotate(new Vector3(0.0f, 1.0f, 0.0f), (float) Math.toDegrees(this.heading + 1.5707963267948966d));
+                // Set absolute transform to avoid cumulative errors and weird rotation-translation interaction
+                modelInstance2.transform.setToTranslation(this.currentPos);
+                modelInstance2.transform.rotate(Vector3.Y, (float) Math.toDegrees(this.heading + 1.5707963267948966d));
             }
             if (SceneFishesAppListener.this.shadowQuality <= 0 || (modelInstance = this.shadowInstance) == null) {
                 return;
             }
-            modelInstance.transform.rotate(new Vector3(0.0f, 1.0f, 0.0f), -((float) Math.toDegrees(f7 + 1.5707963267948966d)));
-            this.shadowInstance.transform.translate(vector3);
-            this.shadowInstance.transform.getTranslation(this.currentPos);
-            this.shadowInstance.transform.rotate(new Vector3(0.0f, 1.0f, 0.0f), (float) Math.toDegrees(this.heading + 1.5707963267948966d));
+            modelInstance.transform.setToTranslation(this.currentPos);
+            this.shadowInstance.transform.rotate(Vector3.Y, (float) Math.toDegrees(this.heading + 1.5707963267948966d));
         }
 
         private Fish(Model model, Model model2, float f2) {
@@ -333,8 +364,8 @@ public class SceneFishesAppListener extends BaseAppListener {
         private Vector3 position;
         private float lifeTime;
         private boolean isConsumed;
-        private static final float MAX_LIFETIME = 30.0f; // 30 seconds
-        private static final float BAIT_SIZE = 60.0f; // Adjusted size
+        private boolean helperSpawned; // Track if we already spawned a fish for this bait
+        private static final float BAIT_SIZE = 30.0f; // Reduced size
 
         public Bait(Vector3 worldPosition) {
             this.position = new Vector3(worldPosition);
@@ -393,7 +424,8 @@ public class SceneFishesAppListener extends BaseAppListener {
         }
 
         public boolean shouldRemove() {
-            return this.isConsumed || this.lifeTime > MAX_LIFETIME || this.position.y < SceneFishesAppListener.this.spawnYStart - 200;
+            // Bait must be eaten (removed 30s limit)
+            return this.isConsumed || this.position.y < SceneFishesAppListener.this.spawnYStart - 500;
         }
 
         public void consume() {
@@ -485,7 +517,7 @@ public class SceneFishesAppListener extends BaseAppListener {
         private long lastRippleTime;
 
         public void addRippleAtScreenPos(float f2, float f3) {
-            addRipple((f2 * 0.6f) + ((this.screenWidth * 0.39999998f) / 2.0f), (f3 * 0.6f) + ((this.screenHeight * 0.39999998f) / 2.0f));
+            addRipple(f2, f3);
         }
 
         private void addRipple(float f2, float f3) {
@@ -886,6 +918,13 @@ public class SceneFishesAppListener extends BaseAppListener {
         while (baitIt.hasNext()) {
             Bait bait = (Bait) baitIt.next();
             bait.update(deltaTime);
+            
+            // Helper fish logic: if bait exists for 5s and hasn't triggered a helper fish
+            if (!bait.isConsumed() && bait.lifeTime > 5.0f && !bait.helperSpawned) {
+                spawnHelperFish(bait);
+                bait.helperSpawned = true;
+            }
+            
             if (bait.shouldRemove()) {
                 bait.dispose();
                 baitIt.remove();
@@ -893,6 +932,32 @@ public class SceneFishesAppListener extends BaseAppListener {
         }
         
         this.waterSimulation.updateSimulation(deltaTime);
+    }
+
+    private void spawnHelperFish(Bait bait) {
+        if (this.fishResources.size() == 0) return;
+        
+        // Pick random resource
+        FishResource fr = (FishResource) this.fishResources.get((int)(Math.random() * this.fishResources.size()));
+        Model m = getModel(fr.modelName);
+        Model sm = getModel(fr.shadowModelName);
+        
+        if (m != null) {
+            // Spawn fish at a random side of the screen
+            float y = this.spawnYStart + (float)Math.random() * 500.0f;
+            float sideX = (Math.random() > 0.5 ? 1 : -1) * (this.spawnAreaWidth / 2.0f);
+            float z = (float)Math.random() * this.spawnAreaDepth - (this.spawnAreaDepth / 2.0f);
+            
+            Fish helper = new Fish(m, sm, y);
+            helper.modelInstance.transform.setTranslation(sideX, y, z);
+            helper.currentPos.set(sideX, y, z);
+            
+            // Force seek the bait
+            helper.forceSeekBait(bait);
+            this.activeFishes.add(helper);
+            
+            Log.d("SceneFishes", "Helper fish spawned for bait!");
+        }
     }
 
     @Override // com.wave.livewallpaper.libgdx.BaseAppListener, com.badlogic.gdx.ApplicationListener
@@ -1227,6 +1292,27 @@ public class SceneFishesAppListener extends BaseAppListener {
         // Create bait at calculated world position
         Bait newBait = new Bait(worldPos);
         this.activeBaits.add(newBait);
+        
+        // Attraction Guarantee: Find nearest fish and force it to swim to this bait
+        Fish nearestFish = null;
+        float minDist = Float.MAX_VALUE;
+        if (this.activeFishes.size > 0) {
+            for (int i = 0; i < this.activeFishes.size; i++) {
+                Fish f = (Fish)this.activeFishes.get(i);
+                float dx = f.currentPos.x - worldPos.x;
+                float dz = f.currentPos.z - worldPos.z;
+                float d = (float)Math.sqrt(dx*dx + dz*dz);
+                if (d < minDist) {
+                    minDist = d;
+                    nearestFish = f;
+                }
+            }
+        }
+        
+        if (nearestFish != null) {
+            nearestFish.forceSeekBait(newBait);
+            Log.d("SceneFishes", "Nearest fish forced to target bait");
+        }
         
         Log.d("SceneFishes", "Bait created at world position: " + worldPos);
     }
