@@ -62,6 +62,7 @@ public class SceneFishesAppListener extends BaseAppListener {
     private int shadowQuality;
     private float viewportHalfWidth;
     private float viewportHalfHeight;
+    private com.badlogic.gdx.graphics.Texture baitTexture; // Shared bait texture
     private float viewportNearPlane;
     private float viewportFarPlane;
     private float viewportMidPlane;
@@ -112,8 +113,8 @@ public class SceneFishesAppListener extends BaseAppListener {
         private ModelInstance debugArrow;
         private Bait targetBait;  // New: bait that fish is targeting
         private boolean isSeekingBait;  // New: whether fish is actively seeking bait
-        private static final float BAIT_DETECTION_RANGE = 200.0f;  // Increased detection range
-        private static final float BAIT_CONSUME_RANGE = 40.0f;     // Increased consume range
+        private static final float BAIT_DETECTION_RANGE = 500.0f;  // Greatly increased detection range
+        private static final float BAIT_CONSUME_RANGE = 50.0f;     // Increased consume range
 
         public boolean isOutOfBounds() {
             return this.currentPos.x < SceneFishesAppListener.this.spawnBounds.min.x || this.currentPos.z < SceneFishesAppListener.this.spawnBounds.min.z || this.currentPos.x > SceneFishesAppListener.this.spawnBounds.max.x || this.currentPos.z > SceneFishesAppListener.this.spawnBounds.max.z;
@@ -196,16 +197,11 @@ public class SceneFishesAppListener extends BaseAppListener {
             if (this.targetBait == null || this.targetBait.isConsumed()) {
                 this.targetBait = findNearestBait();
                 this.isSeekingBait = (this.targetBait != null);
-                if (this.targetBait != null) {
-                    Log.d("SceneFishes", "Fish found new bait target at: " + this.targetBait.getPosition());
-                }
             }
             
             if (this.targetBait != null && !this.targetBait.isConsumed()) {
                 Vector3 baitPos = this.targetBait.getPosition();
                 float distanceToBait = this.currentPos.dst(baitPos);
-                
-                Log.v("SceneFishes", "Fish at " + this.currentPos + " seeking bait at " + baitPos + ", distance: " + distanceToBait);
                 
                 if (distanceToBait < BAIT_CONSUME_RANGE) {
                     // Consume the bait
@@ -223,19 +219,24 @@ public class SceneFishesAppListener extends BaseAppListener {
                     this.targetBait = null;
                     this.isSeekingBait = false;
                     
-                    Log.d("SceneFishes", "Fish consumed bait at distance: " + distanceToBait);
+                    Log.d("SceneFishes", "Fish consumed bait");
                 } else if (distanceToBait < BAIT_DETECTION_RANGE) {
-                    // Move towards bait
+                    // Move towards bait aggressively
                     Vector3 direction = new Vector3(baitPos).sub(this.currentPos).nor();
-                    this.heading = (float) Math.atan2(-direction.z, direction.x);
-                    this.currentSpeed = Math.max(this.currentSpeed, this.baseSpeed * 2.0f); // Speed up more when seeking bait
+                    float targetHeading = (float) Math.atan2(-direction.z, direction.x);
                     
-                    Log.v("SceneFishes", "Fish heading towards bait, new heading: " + Math.toDegrees(this.heading));
+                    // Smoothly turn towards bait
+                    float angleDiff = targetHeading - this.heading;
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    this.heading += angleDiff * 12.0f * deltaTime; // Faster turn rate
+                    
+                    // Maintain high speed when seeking bait
+                    this.currentSpeed = Math.max(this.currentSpeed, this.baseSpeed * 3.5f);
                 } else {
                     // Bait too far, stop seeking
                     this.targetBait = null;
                     this.isSeekingBait = false;
-                    Log.d("SceneFishes", "Bait too far (" + distanceToBait + "), fish stopped seeking");
                 }
             }
         }
@@ -333,50 +334,38 @@ public class SceneFishesAppListener extends BaseAppListener {
         private float lifeTime;
         private boolean isConsumed;
         private static final float MAX_LIFETIME = 30.0f; // 30 seconds
-        private static final float BAIT_SIZE = 25.0f; // Increase size to make it more visible
+        private static final float BAIT_SIZE = 60.0f; // Adjusted size
 
         public Bait(Vector3 worldPosition) {
             this.position = new Vector3(worldPosition);
             this.lifeTime = 0.0f;
             this.isConsumed = false;
             
-            // Create a textured plane for the bait using bait.png
-            ModelBuilder modelBuilder = new ModelBuilder();
-            
-            // Load bait texture
-            com.badlogic.gdx.graphics.Texture baitTexture = null;
-            try {
-                if (SceneFishesAppListener.this.fileHandleResolver.resolve("../textures/bait.png").exists()) {
-                    baitTexture = new com.badlogic.gdx.graphics.Texture(
-                        SceneFishesAppListener.this.fileHandleResolver.resolve("../textures/bait.png"));
-                } else {
-                    Log.w("SceneFishes", "bait.png not found, using default color");
-                }
-            } catch (Exception e) {
-                Log.e("SceneFishes", "Failed to load bait texture: " + e.getMessage());
-            }
-            
             Material baitMaterial;
-            if (baitTexture != null) {
+            if (SceneFishesAppListener.this.baitTexture != null) {
                 baitMaterial = new Material(
-                    com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute.createDiffuse(baitTexture),
-                    new BlendingAttribute(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA)
+                    com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute.createDiffuse(SceneFishesAppListener.this.baitTexture),
+                    ColorAttribute.createDiffuse(Color.WHITE),
+                    new BlendingAttribute(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA),
+                    com.badlogic.gdx.graphics.g3d.attributes.IntAttribute.createCullFace(GL20.GL_NONE) // Double-sided
                 );
             } else {
-                // Fallback to bright orange color
+                // Fallback to bright red color for debugging
                 baitMaterial = new Material(
-                    ColorAttribute.createDiffuse(Color.ORANGE),
-                    ColorAttribute.createEmissive(0.3f, 0.3f, 0.0f, 1.0f)
+                    ColorAttribute.createDiffuse(Color.RED),
+                    ColorAttribute.createEmissive(Color.RED),
+                    com.badlogic.gdx.graphics.g3d.attributes.IntAttribute.createCullFace(GL20.GL_NONE)
                 );
             }
             
-            // Create a billboard plane that always faces the camera
+            // Create a rect in the XZ plane so it's visible from top-down camera
+            ModelBuilder modelBuilder = new ModelBuilder();
             Model baitModel = modelBuilder.createRect(
-                -BAIT_SIZE/2, -BAIT_SIZE/2, 0,
-                BAIT_SIZE/2, -BAIT_SIZE/2, 0,
-                BAIT_SIZE/2, BAIT_SIZE/2, 0,
-                -BAIT_SIZE/2, BAIT_SIZE/2, 0,
-                0, 0, 1,
+                -BAIT_SIZE/2, 0, -BAIT_SIZE/2,
+                BAIT_SIZE/2, 0, -BAIT_SIZE/2,
+                BAIT_SIZE/2, 0, BAIT_SIZE/2,
+                -BAIT_SIZE/2, 0, BAIT_SIZE/2,
+                0, 1, 0,
                 baitMaterial,
                 VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal | VertexAttributes.Usage.TextureCoordinates
             );
@@ -384,7 +373,7 @@ public class SceneFishesAppListener extends BaseAppListener {
             this.modelInstance = new ModelInstance(baitModel);
             this.modelInstance.transform.setTranslation(this.position);
             
-            Log.d("SceneFishes", "Bait created at position: " + this.position + " with texture: " + (baitTexture != null));
+            Log.d("SceneFishes", "Bait instance created at: " + this.position);
         }
 
         public void update(float deltaTime) {
@@ -395,12 +384,11 @@ public class SceneFishesAppListener extends BaseAppListener {
             this.lifeTime += deltaTime;
             
             // Slowly sink the bait
-            this.position.y -= 2.0f * deltaTime; // Slower sinking
+            this.position.y -= 10.0f * deltaTime; // Slightly faster sinking but still slow
             
             // Add slight bobbing animation
-            float bobOffset = (float) Math.sin(this.lifeTime * 2.0f) * 3.0f;
+            float bobOffset = (float) Math.sin(this.lifeTime * 2.5f) * 2.0f;
             
-            // Simple positioning without complex billboard - just update position
             this.modelInstance.transform.setTranslation(this.position.x, this.position.y + bobOffset, this.position.z);
         }
 
@@ -772,8 +760,8 @@ public class SceneFishesAppListener extends BaseAppListener {
         Gdx.gl.glClear(16640);
         
         // Debug GL state
-        Log.v("SceneFishes", "GL depth test enabled: " + Gdx.gl.glIsEnabled(GL20.GL_DEPTH_TEST));
-        Log.v("SceneFishes", "GL cull face enabled: " + Gdx.gl.glIsEnabled(GL20.GL_CULL_FACE));
+//        Log.v("SceneFishes", "GL depth test enabled: " + Gdx.gl.glIsEnabled(GL20.GL_DEPTH_TEST));
+//        Log.v("SceneFishes", "GL cull face enabled: " + Gdx.gl.glIsEnabled(GL20.GL_CULL_FACE));
         
         ModelBatch modelBatch = this.defaultBatch;
         if (this.shadowQuality > 0) {
@@ -795,10 +783,10 @@ public class SceneFishesAppListener extends BaseAppListener {
         if (modelInstance3 != null) {
             // Debug texture information
             if (modelInstance3.materials.size > 0) {
-                Log.v("SceneFishes", "Background materials count: " + modelInstance3.materials.size);
+//                Log.v("SceneFishes", "Background materials count: " + modelInstance3.materials.size);
                 for (int i = 0; i < modelInstance3.materials.size; i++) {
                     Material mat = modelInstance3.materials.get(i);
-                    Log.v("SceneFishes", "Material " + i + ": " + mat.id + " with " + mat.size() + " attributes");
+//                    Log.v("SceneFishes", "Material " + i + ": " + mat.id + " with " + mat.size() + " attributes");
                 }
             }
             
@@ -807,9 +795,9 @@ public class SceneFishesAppListener extends BaseAppListener {
             modelBatch.render(modelInstance3, this.environment);
             Gdx.gl.glDepthMask(true);
             
-            Log.v("SceneFishes", "Background rendered with environment");
+//            Log.v("SceneFishes", "Background rendered with environment");
         } else {
-            Log.w("SceneFishes", "Background model is null, not rendering");
+//            Log.w("SceneFishes", "Background model is null, not rendering");
         }
         modelBatch.end();
         Gdx.gl.glClear(256);
@@ -832,11 +820,13 @@ public class SceneFishesAppListener extends BaseAppListener {
         }
         
         // Render baits
-        Array.ArrayIterator baitIt = this.activeBaits.iterator();
-        while (baitIt.hasNext()) {
-            Bait bait = (Bait) baitIt.next();
-            if (!bait.isConsumed()) {
-                this.defaultBatch.render(bait.modelInstance, this.environment);
+        if (this.activeBaits.size > 0) {
+            Array.ArrayIterator baitIt = this.activeBaits.iterator();
+            while (baitIt.hasNext()) {
+                Bait bait = (Bait) baitIt.next();
+                if (!bait.isConsumed()) {
+                    this.defaultBatch.render(bait.modelInstance, this.environment);
+                }
             }
         }
         
@@ -1004,6 +994,17 @@ public class SceneFishesAppListener extends BaseAppListener {
         // Bait array
         this.activeBaits = new Array();
 
+        // Load bait texture once
+        try {
+            if (this.fileHandleResolver.resolve("textures/bait.png").exists()) {
+                this.baitTexture = new com.badlogic.gdx.graphics.Texture(
+                    this.fileHandleResolver.resolve("textures/bait.png"));
+                Log.d("Number4", "Bait texture loaded successfully");
+            }
+        } catch (Exception e) {
+            Log.e("Number4", "Failed to load bait texture: " + e.getMessage());
+        }
+
         // GLTF/GLB asset loaders are auto-registered by gdx-gltf library dependency
 
         // Load BG model
@@ -1124,6 +1125,10 @@ public class SceneFishesAppListener extends BaseAppListener {
             }
             this.activeBaits.clear();
         }
+        if (this.baitTexture != null) {
+            this.baitTexture.dispose();
+            this.baitTexture = null;
+        }
         Array array3 = this.sceneShaders;
         if (array3 != null) {
             Array.ArrayIterator it = array3.iterator();
@@ -1150,7 +1155,7 @@ public class SceneFishesAppListener extends BaseAppListener {
     /* JADX WARN: Multi-variable type inference failed */
     @Override // com.wave.livewallpaper.libgdx.BaseAppListener
     public void onTouchEvent(MotionEvent motionEvent) {
-        if (this.activeFishes == null) {
+        if (this.activeFishes == null || motionEvent.getAction() != MotionEvent.ACTION_DOWN) {
             return;
         }
         
@@ -1167,21 +1172,22 @@ public class SceneFishesAppListener extends BaseAppListener {
             );
             if (distance < DOUBLE_TAP_DISTANCE) {
                 isDoubleTap = true;
-                Log.d("SceneFishes", "Double-tap detected at: " + touchX + ", " + touchY + ", distance: " + distance);
-            } else {
-                Log.d("SceneFishes", "Touch too far from last touch: " + distance + " pixels");
+                this.lastTouchTime = 0; // Reset to prevent triple-tap sequence
+                Log.d("SceneFishes", "Double-tap detected at: " + touchX + ", " + touchY);
             }
-        } else {
-            Log.d("SceneFishes", "Touch timeout: " + (currentTime - this.lastTouchTime) + "ms");
         }
         
-        this.lastTouchTime = currentTime;
-        this.lastTouchX = touchX;
-        this.lastTouchY = touchY;
+        if (!isDoubleTap) {
+            this.lastTouchTime = currentTime;
+            this.lastTouchX = touchX;
+            this.lastTouchY = touchY;
+        }
         
         if (isDoubleTap) {
-            // Create bait at touch position
-            createBaitAtScreenPosition(touchX, touchY);
+            // Create bait at touch position (Flip Y to account for coordinate inversion)
+            createBaitAtScreenPosition(touchX, Gdx.graphics.getHeight() - touchY);
+            // Ripple at bait drop position
+            this.waterSimulation.addRippleAtScreenPos(touchX, Gdx.graphics.getHeight() - touchY);
         } else {
             // Normal touch behavior - startle fish and create water ripple
             float width = (Gdx.graphics.getWidth() > Gdx.graphics.getHeight() ? Gdx.graphics.getWidth() : Gdx.graphics.getHeight()) / 5.0f;
@@ -1193,36 +1199,36 @@ public class SceneFishesAppListener extends BaseAppListener {
                     fish.startleBoost();
                 }
             }
+            // Always create water ripple on single touch too
+            this.waterSimulation.addRippleAtScreenPos(touchX, Gdx.graphics.getHeight() - touchY);
         }
         
-        // Always create water ripple
-        this.waterSimulation.addRippleAtScreenPos(touchX, Gdx.graphics.getHeight() - touchY);
         super.onTouchEvent(motionEvent);
     }
     
     private void createBaitAtScreenPosition(float screenX, float screenY) {
-        // Use the same coordinate conversion as water ripples for consistency
-        float baitX = (screenX * 0.6f) + ((Gdx.graphics.getWidth() * 0.39999998f) / 2.0f);
-        float baitZ = (screenY * 0.6f) + ((Gdx.graphics.getHeight() * 0.39999998f) / 2.0f);
+        // Use camera pick ray to find exact world position on the fish plane
+        com.badlogic.gdx.math.collision.Ray ray = this.sceneCamera.getPickRay(screenX, screenY);
         
-        // Convert to world coordinates similar to water simulation
-        float worldX = ((baitX / Gdx.graphics.getWidth()) - 0.5f) * this.spawnAreaWidth;
-        float worldZ = ((1.0f - (baitZ / Gdx.graphics.getHeight())) - 0.5f) * this.spawnAreaDepth;
-        float worldY = this.spawnYStart + 25.0f; // Just above fish level
+        // Target plane is roughly at the y-level where fish swim
+        float targetY = this.spawnYStart + 50.0f;
         
-        Vector3 worldCoords = new Vector3(worldX, worldY, worldZ);
+        // Calculate intersection point (worldPos = rayOrigin + rayDir * t)
+        // targetY = rayOrigin.y + rayDir.y * t  => t = (targetY - rayOrigin.y) / rayDir.y
+        float t = (targetY - ray.origin.y) / ray.direction.y;
+        Vector3 worldPos = new Vector3(ray.direction).scl(t).add(ray.origin);
         
         // Clamp to spawn area bounds
-        worldCoords.x = Math.max(-this.spawnAreaWidth/2 + 50, Math.min(this.spawnAreaWidth/2 - 50, worldCoords.x));
-        worldCoords.z = Math.max(-this.spawnAreaDepth/2 + 50, Math.min(this.spawnAreaDepth/2 - 50, worldCoords.z));
+        float halfW = this.spawnAreaWidth / 2.0f;
+        float halfD = this.spawnAreaDepth / 2.0f;
+        worldPos.x = Math.max(-halfW + 50, Math.min(halfW - 50, worldPos.x));
+        worldPos.z = Math.max(-halfD + 50, Math.min(halfD - 50, worldPos.z));
         
         // Create bait at calculated world position
-        Bait newBait = new Bait(worldCoords);
+        Bait newBait = new Bait(worldPos);
         this.activeBaits.add(newBait);
         
-        Log.d("SceneFishes", "Bait created at world position: " + worldCoords + " from screen: " + screenX + ", " + screenY);
-        Log.d("SceneFishes", "Spawn area: " + this.spawnAreaWidth + "x" + this.spawnAreaDepth + ", Y: " + this.spawnYStart);
-        Log.d("SceneFishes", "Total active baits: " + this.activeBaits.size);
+        Log.d("SceneFishes", "Bait created at world position: " + worldPos);
     }
 
     @Override // com.wave.livewallpaper.libgdx.BaseAppListener, com.badlogic.gdx.backends.android.AndroidWallpaperListener
@@ -1241,7 +1247,7 @@ public class SceneFishesAppListener extends BaseAppListener {
     }
 
     @Override // com.wave.livewallpaper.libgdx.BaseAppListener, com.badlogic.gdx.ApplicationListener
-    public synchronized void render() {
+    public void render() {
         try {
             if (this.isLoading) {
                 LibgdxUtils.clearScreen();

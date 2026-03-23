@@ -28,8 +28,8 @@ public class GenericAppListener implements ApplicationListener, AndroidWallpaper
     public Context context;
     private String wallpaperPrefsKey;
     private String wallpaperDiskPath;
-    private BaseAppListener delegate;
-    private boolean pendingRestart;
+    private volatile BaseAppListener delegate;
+    private volatile boolean pendingRestart;
     private final Object lock = new Object();
     private boolean isPreview = true;
 
@@ -244,7 +244,7 @@ public class GenericAppListener implements ApplicationListener, AndroidWallpaper
     }
 
     @Override
-    public synchronized void render() {
+    public void render() {
         BaseAppListener listener = this.delegate;
         if (listener == null) {
             LibgdxUtils.clearScreen();

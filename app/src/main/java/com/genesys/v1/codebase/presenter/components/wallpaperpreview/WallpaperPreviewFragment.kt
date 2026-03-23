@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration
 import com.badlogic.gdx.backends.android.AndroidFragmentApplication
 import com.wave.livewallpaper.libgdx.GenericAppListener
+import com.wave.livewallpaper.libgdx.SafeGenericAppListener
 import java.io.IOException
 
 /**
@@ -44,10 +45,10 @@ class WallpaperPreviewFragment : AndroidFragmentApplication() {
         }
 
         val listener = try {
-            GenericAppListener(requireContext(), wallpaperPath)
+            SafeGenericAppListener(requireContext(), wallpaperPath)
         } catch (e: IOException) {
             // Fallback: use the other constructor overload
-            GenericAppListener(wallpaperPath, requireContext())
+            SafeGenericAppListener(wallpaperPath, requireContext())
         }
 
         return initializeForView(listener, config)

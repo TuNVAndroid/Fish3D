@@ -341,7 +341,7 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
     }
 
     @Override
-    public synchronized void render() {
+    public void render() {
         try {
             this.deltaTime = Gdx.graphics.getDeltaTime();
             this.lockscreenRenderer.render();
