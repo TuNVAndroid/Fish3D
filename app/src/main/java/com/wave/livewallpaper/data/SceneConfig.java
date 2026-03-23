@@ -17,6 +17,10 @@ public class SceneConfig {
     public float floorPosZ = 100.0f;
     public float floorRotationX = 0.0f;
     public float floorRotationY = 90.0f;
+    public float floorScaleX = 1.0f;
+    public float floorScaleZ = 1.0f;
+    public boolean floorFlipX = false;
+    public boolean floorFlipZ = false;
 
     public boolean isEmpty() {
         return this == EMPTY;

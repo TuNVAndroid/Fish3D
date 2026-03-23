@@ -83,6 +83,10 @@ public class SceneFishesAppListener extends BaseAppListener {
     private float floorPosZ;
     private float floorRotationX;
     private float floorRotationY;
+    private float floorScaleX = 1.0f;
+    private float floorScaleZ = 1.0f;
+    private boolean floorFlipX = false;
+    private boolean floorFlipZ = false;
     private boolean debugMode;
     private boolean firstFrameAfterPause;
     private Environment environment;
@@ -666,10 +670,7 @@ public class SceneFishesAppListener extends BaseAppListener {
             ModelInstance modelInstance = new ModelInstance(bgModel);
             this.backgroundModel = modelInstance;
             
-            // Apply standard positioning for all wallpapers
-            modelInstance.transform.translate(this.floorPosX, this.floorPosY, this.floorPosZ);
-            modelInstance.transform.rotate(1.0f, 0.0f, 0.0f, this.floorRotationX);
-            modelInstance.transform.rotate(0.0f, 1.0f, 0.0f, this.floorRotationY);
+            updateBackgroundTransform();
             
             String wallpaperType = WallpaperSelectionManager.getWallpaperIdFromPath(this.wallpaperDiskPath);
             Log.d("SceneFishes", "Background model loaded for " + wallpaperType + 
@@ -753,6 +754,10 @@ public class SceneFishesAppListener extends BaseAppListener {
         this.floorPosZ = config.floorPosZ;
         this.floorRotationX = config.floorRotationX;
         this.floorRotationY = config.floorRotationY;
+        this.floorScaleX = config.floorScaleX;
+        this.floorScaleZ = config.floorScaleZ;
+        this.floorFlipX = config.floorFlipX;
+        this.floorFlipZ = config.floorFlipZ;
     }
 
     /* JADX WARN: Multi-variable type inference failed */
@@ -1408,6 +1413,59 @@ public class SceneFishesAppListener extends BaseAppListener {
         orthographicCamera.viewportHeight = f6;
         orthographicCamera.position.set(f5 / 2.0f, f6 / 2.0f, 0.0f);
         this.orthoCamera.update();
+        
+        // Update background scale for new aspect ratio
+        updateBackgroundTransform();
+    }
+
+    private void updateBackgroundTransform() {
+        if (this.backgroundModel == null || this.sceneCamera == null) return;
+
+        // 1. Calculate required world coverage for full screen (Center Crop)
+        float minX = Float.MAX_VALUE, maxX = -Float.MAX_VALUE;
+        float minZ = Float.MAX_VALUE, maxZ = -Float.MAX_VALUE;
+
+        int w = Gdx.graphics.getWidth();
+        int h = Gdx.graphics.getHeight();
+        if (w <= 0 || h <= 0) return;
+
+        float[][] corners = {{0, 0}, {w, 0}, {0, h}, {w, h}};
+        for (float[] corner : corners) {
+            com.badlogic.gdx.math.collision.Ray ray = this.sceneCamera.getPickRay(corner[0], corner[1]);
+            float t = (this.floorPosY - ray.origin.y) / ray.direction.y;
+            Vector3 intersection = new Vector3(ray.direction).scl(t).add(ray.origin);
+            minX = Math.min(minX, intersection.x); maxX = Math.max(maxX, intersection.x);
+            minZ = Math.min(minZ, intersection.z); maxZ = Math.max(maxZ, intersection.z);
+        }
+
+        float requiredW = maxX - minX;
+        float requiredD = maxZ - minZ;
+
+        // 2. Get model base size
+        BoundingBox bbox = new BoundingBox();
+        this.backgroundModel.model.calculateBoundingBox(bbox);
+        float modelW = bbox.getWidth();
+        float modelD = bbox.getDepth();
+        if (modelW <= 0) modelW = 1000f;
+        if (modelD <= 0) modelD = 1000f;
+
+        // 3. Compute scale for Center Crop
+        boolean isRotated = Math.abs(this.floorRotationY % 180) > 45 && Math.abs(this.floorRotationY % 180) < 135;
+        float targetModelW = isRotated ? modelD : modelW;
+        float targetModelD = isRotated ? modelW : modelD;
+
+        float autoScale = Math.max(requiredW / targetModelW, requiredD / targetModelD) * 1.1f; // 10% safety margin
+
+        // 4. Set final transform
+        float finalScaleX = autoScale * this.floorScaleX * (this.floorFlipX ? -1 : 1);
+        float finalScaleZ = autoScale * this.floorScaleZ * (this.floorFlipZ ? -1 : 1);
+
+        this.backgroundModel.transform.setToTranslation(this.floorPosX, this.floorPosY, this.floorPosZ);
+        this.backgroundModel.transform.rotate(Vector3.X, this.floorRotationX);
+        this.backgroundModel.transform.rotate(Vector3.Y, this.floorRotationY);
+        this.backgroundModel.transform.scl(finalScaleX, 1.0f, finalScaleZ);
+        
+        Log.d("SceneFishes", "Background auto-scaled to " + autoScale + " to cover " + requiredW + "x" + requiredD);
     }
 
     @Override // com.wave.livewallpaper.libgdx.BaseAppListener, com.badlogic.gdx.ApplicationListener
