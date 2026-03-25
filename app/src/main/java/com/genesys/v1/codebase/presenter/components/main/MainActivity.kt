@@ -23,6 +23,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         private const val ASSETS_CLOWNFISH = "com.wave.livewallpaper.clownfishes"
         /** Goldfish bundle — uses G3DB models */
         private const val ASSETS_GOLDFISH = "com.wave.livewallpaper.livefisheslivewallpaper"
+        /** Test Fish bundle — prototype GLTF */
+        private const val ASSETS_TEST_FISH = "test_fish"
 
         private const val REQUEST_SET_WALLPAPER = 1002
     }
@@ -37,6 +39,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         wallpaperSelectionManager = WallpaperSelectionManager(this)
         loadPreviewImage(ASSETS_CLOWNFISH, viewBinding.ivPreviewGltf)
         loadPreviewImage(ASSETS_GOLDFISH, viewBinding.ivPreviewG3db)
+        loadPreviewImage(ASSETS_TEST_FISH, viewBinding.ivPreviewTestFish)
     }
 
     override fun initListeners() {
@@ -51,6 +54,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         viewBinding.cardG3db.setOnClickListener { openPreview(ASSETS_GOLDFISH) }
         viewBinding.btnPreviewG3db.setOnClickListener { openPreview(ASSETS_GOLDFISH) }
         viewBinding.btnSetG3db.setOnClickListener { applyWallpaperDirect(ASSETS_GOLDFISH) }
+
+        // ---- Test Fish card ----
+        viewBinding.cardTestFish.setOnClickListener { openPreview(ASSETS_TEST_FISH) }
+        viewBinding.btnPreviewTestFish.setOnClickListener { openPreview(ASSETS_TEST_FISH) }
+        viewBinding.btnSetTestFish.setOnClickListener { applyWallpaperDirect(ASSETS_TEST_FISH) }
     }
 
     private fun loadPreviewImage(assetsPath: String, imageView: android.widget.ImageView) {

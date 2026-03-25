@@ -22,4 +22,6 @@
     <string name="goldfish_subtitle">5 classic goldfish • G3DB models</string>
     <string name="format_gltf">GLTF</string>
     <string name="format_g3db">G3DB</string>
+    <string name="test_fish_title">Test Fish Lab</string>
+    <string name="test_fish_subtitle">Prototype set • Custom assets</string>
 </resources>

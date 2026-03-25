@@ -1,0 +1,7 @@
+{
+  "type": "3dscene",
+  "vfx": {
+    "background": "none",
+    "touch": "water"
+  }
+}

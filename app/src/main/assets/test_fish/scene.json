@@ -1,0 +1,16 @@
+{
+  "cameraDistance": 1000,
+  "cameraAngleX": -15,
+  "spawnAreaWidth": 1000,
+  "spawnAreaDepth": 2000,
+  "noSpawnAreaWidth": 600,
+  "noSpawnAreaDepth": 1600,
+  "spawnYStart": -150,
+  "spawnYIncrement": 75,
+  "floorPosX": 0,
+  "floorPosY": -500,
+  "floorPosZ": 100,
+  "floorRotationX": 0,
+  "floorRotationY": 90,
+  "floorFlipZ": false
+}

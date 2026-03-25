@@ -87,7 +87,7 @@ public class SceneFishesAppListener extends BaseAppListener {
     private float floorScaleZ = 1.0f;
     private boolean floorFlipX = false;
     private boolean floorFlipZ = false;
-    private boolean debugMode;
+    private boolean debugMode = false;
     private boolean firstFrameAfterPause;
     private Environment environment;
     private PerspectiveCamera lightCamera;
@@ -111,6 +111,7 @@ public class SceneFishesAppListener extends BaseAppListener {
         private Vector3 targetPos;
         private Vector3 currentPos;
         private float heading;
+        private float rotationOffset;
         private float turnRate;
         private float baseSpeed;
         private float currentSpeed;
@@ -118,6 +119,8 @@ public class SceneFishesAppListener extends BaseAppListener {
         private Bait targetBait;  // New: bait that fish is targeting
         private boolean isSeekingBait;  // New: whether fish is actively seeking bait
         private boolean isForcedToBait; // Whether this fish was specifically assigned to a bait
+        private float modelScale = 1.0f;
+        private static final float TARGET_FISH_SIZE = 150.0f; // Target size in world units
         private static final float BAIT_DETECTION_RANGE = 200.0f;
         private static final float BAIT_CONSUME_RANGE = 20.0f; // Closer for more realistic contact
         private static final float SPEED_OF_FISH_TURNING= 20.0f;
@@ -156,9 +159,6 @@ public class SceneFishesAppListener extends BaseAppListener {
             Vector3 vector33 = this.startPos;
             vector32.x = vector33.x + (vector3.x * f2);
             vector32.z = vector33.z + (f2 * vector3.z);
-            if (SceneFishesAppListener.this.debugMode) {
-                this.debugArrow = new ModelInstance(new ModelBuilder().createArrow(this.startPos, this.targetPos, new Material(ColorAttribute.createDiffuse(Color.GREEN)), 9L));
-            }
             float f5 = this.targetPos.z;
             Vector3 vector34 = this.startPos;
             this.heading = (float) Math.atan2((f5 - vector34.z) * (-1.0f), this.targetPos.x - vector34.x);
@@ -166,14 +166,16 @@ public class SceneFishesAppListener extends BaseAppListener {
             if (modelInstance2 != null) {
                 modelInstance2.transform.setToTranslation(this.startPos);
                 this.modelInstance.transform.getTranslation(this.currentPos);
-                this.modelInstance.transform.rotate(new Vector3(0.0f, 1.0f, 0.0f), (float) Math.toDegrees(this.heading + 1.5707963267948966d));
+                this.modelInstance.transform.rotate(new Vector3(0.0f, 1.0f, 0.0f), (float) Math.toDegrees(this.heading + this.rotationOffset));
+                this.modelInstance.transform.scl(this.modelScale);
             }
             if (SceneFishesAppListener.this.shadowQuality <= 0 || (modelInstance = this.shadowInstance) == null) {
                 return;
             }
             modelInstance.transform.setToTranslation(this.startPos);
             this.shadowInstance.transform.getTranslation(this.currentPos);
-            this.shadowInstance.transform.rotate(new Vector3(0.0f, 1.0f, 0.0f), (float) Math.toDegrees(this.heading + 1.5707963267948966d));
+            this.shadowInstance.transform.rotate(new Vector3(0.0f, 1.0f, 0.0f), (float) Math.toDegrees(this.heading + this.rotationOffset));
+            this.shadowInstance.transform.scl(this.modelScale);
         }
 
         public void startleBoost() {
@@ -321,16 +323,19 @@ public class SceneFishesAppListener extends BaseAppListener {
             if (modelInstance2 != null) {
                 // Set absolute transform to avoid cumulative errors and weird rotation-translation interaction
                 modelInstance2.transform.setToTranslation(this.currentPos);
-                modelInstance2.transform.rotate(Vector3.Y, (float) Math.toDegrees(this.heading + 1.5707963267948966d));
+                modelInstance2.transform.rotate(Vector3.Y, (float) Math.toDegrees(this.heading + this.rotationOffset));
+                modelInstance2.transform.scl(this.modelScale);
             }
             if (SceneFishesAppListener.this.shadowQuality <= 0 || (modelInstance = this.shadowInstance) == null) {
                 return;
             }
             modelInstance.transform.setToTranslation(this.currentPos);
-            this.shadowInstance.transform.rotate(Vector3.Y, (float) Math.toDegrees(this.heading + 1.5707963267948966d));
+            this.shadowInstance.transform.rotate(Vector3.Y, (float) Math.toDegrees(this.heading + this.rotationOffset));
+            this.shadowInstance.transform.scl(this.modelScale);
         }
 
-        private Fish(Model model, Model model2, float f2) {
+        private Fish(Model model, Model model2, float f2, float rotationOffset) {
+            this.rotationOffset = rotationOffset;
             if (model != null) {
                 ModelInstance modelInstance = new ModelInstance(model);
                 this.modelInstance = modelInstance;
@@ -344,6 +349,15 @@ public class SceneFishesAppListener extends BaseAppListener {
                 Array<Animation> array = this.modelInstance.animations;
                 if (array.size > 0) {
                     animationController.setAnimation(array.get(0).id, -1);
+                }
+                
+                // Auto-scale based on bounding box size
+                BoundingBox bbox = new BoundingBox();
+                model.calculateBoundingBox(bbox);
+                float currentSize = bbox.getDimensions(new Vector3()).len();
+                if (currentSize > 0 && currentSize < TARGET_FISH_SIZE * 0.5f) {
+                    this.modelScale = TARGET_FISH_SIZE / currentSize;
+                    Log.d("SceneFishes", "Auto-scaling fish model from " + currentSize + " to " + TARGET_FISH_SIZE + " (scale: " + this.modelScale + ")");
                 }
             }
             if (model2 != null) {
@@ -465,6 +479,7 @@ public class SceneFishesAppListener extends BaseAppListener {
         public static final class Builder {
             private String modelName;
             private String shadowModelName;
+            private float rotationOffset = (float) (Math.PI / 2.0); // Default 90 degrees in radians
 
             private Builder() {
             }
@@ -486,6 +501,11 @@ public class SceneFishesAppListener extends BaseAppListener {
                 this.shadowModelName = str;
                 return this;
             }
+
+            public Builder rotationOffset(float offset) {
+                this.rotationOffset = offset;
+                return this;
+            }
         }
 
         static {
@@ -505,7 +525,10 @@ public class SceneFishesAppListener extends BaseAppListener {
         private FishResource(Builder builder) {
             this.modelName = builder.modelName;
             this.shadowModelName = builder.shadowModelName;
+            this.rotationOffset = builder.rotationOffset;
         }
+
+        public float rotationOffset;
     }
 
     private class Water {
@@ -685,9 +708,16 @@ public class SceneFishesAppListener extends BaseAppListener {
             Model fishModel = getModel(fishResource.modelName);
             Model shadowModel = getModel(fishResource.shadowModelName);
             if (fishModel != null) {
-                this.idleFishes.add(new Fish(fishModel, shadowModel, f2));
+                BoundingBox bbox = new BoundingBox();
+                fishModel.calculateBoundingBox(bbox);
+                Log.d("SceneFishes", "Model " + fishResource.modelName + " size: " + 
+                      bbox.getWidth() + "x" + bbox.getHeight() + "x" + bbox.getDepth());
+                
+                float rotationOffset = fishResource.rotationOffset;
+                Fish fish = new Fish(fishModel, shadowModel, f2, rotationOffset);
+                this.idleFishes.add(fish);
                 f2 += this.spawnYIncrement;
-                Log.d("SceneFishes", "Fish model loaded: " + fishResource.modelName);
+                Log.d("SceneFishes", "Fish added: " + fishResource.modelName + " | Rotation Offset: " + rotationOffset + " rad (" + Math.toDegrees(rotationOffset) + " deg)");
             } else {
                 Log.e("SceneFishes", "Failed to load fish model: " + fishResource.modelName);
             }
@@ -779,7 +809,10 @@ public class SceneFishesAppListener extends BaseAppListener {
         this.shadowGenBatch.begin(this.lightCamera);
         Array.ArrayIterator it2 = this.activeFishes.iterator();
         while (it2.hasNext()) {
-            this.shadowGenBatch.render(((Fish) it2.next()).shadowInstance);
+            Fish fish = (Fish) it2.next();
+            if (fish.shadowInstance != null) {
+                this.shadowGenBatch.render(fish.shadowInstance);
+            }
         }
         this.shadowGenBatch.end();
         this.shadowFrameBuffer.end();
@@ -831,15 +864,11 @@ public class SceneFishesAppListener extends BaseAppListener {
             Gdx.gl.glDepthMask(false);
             modelBatch.render(modelInstance3, this.environment);
             Gdx.gl.glDepthMask(true);
-            
-//            Log.v("SceneFishes", "Background rendered with environment");
-        } else {
-//            Log.w("SceneFishes", "Background model is null, not rendering");
         }
+        
         modelBatch.end();
-        Gdx.gl.glClear(256);
-        // Second pass: fish rendered with defaultBatch (no shadow reception)
-        // Shadows only appear on the background/floor, not on the fish themselves
+        Gdx.gl.glClear(256); // Clear depth for fishes
+        
         this.defaultBatch.begin(this.sceneCamera);
         if (this.debugMode && (modelInstance2 = this.debugSpawnBox) != null) {
             this.defaultBatch.render(modelInstance2);
@@ -847,10 +876,13 @@ public class SceneFishesAppListener extends BaseAppListener {
         if (this.debugMode && (modelInstance = this.debugNoSpawnBox) != null) {
             this.defaultBatch.render(modelInstance);
         }
+        
         Array.ArrayIterator it2 = this.activeFishes.iterator();
         while (it2.hasNext()) {
             Fish fish = (Fish) it2.next();
-            this.defaultBatch.render(fish.modelInstance, this.environment);
+            if (fish.modelInstance != null) {
+                this.defaultBatch.render(fish.modelInstance, this.environment);
+            }
             if (fish.debugArrow != null) {
                 this.defaultBatch.render(fish.debugArrow, this.environment);
             }
@@ -861,7 +893,7 @@ public class SceneFishesAppListener extends BaseAppListener {
             Array.ArrayIterator baitIt = this.activeBaits.iterator();
             while (baitIt.hasNext()) {
                 Bait bait = (Bait) baitIt.next();
-                if (!bait.isConsumed()) {
+                if (!bait.isConsumed() && bait.modelInstance != null) {
                     this.defaultBatch.render(bait.modelInstance, this.environment);
                 }
             }
@@ -952,8 +984,9 @@ public class SceneFishesAppListener extends BaseAppListener {
             float y = this.spawnYStart + (float)Math.random() * 500.0f;
             float sideX = (Math.random() > 0.5 ? 1 : -1) * (this.spawnAreaWidth / 2.0f);
             float z = (float)Math.random() * this.spawnAreaDepth - (this.spawnAreaDepth / 2.0f);
-            
-            Fish helper = new Fish(m, sm, y);
+
+            float rotationOffset = (float) (Math.PI / 2.0); // Use 90-degree offset
+            Fish helper = new Fish(m, sm, y, rotationOffset);
             helper.modelInstance.transform.setTranslation(sideX, y, z);
             helper.currentPos.set(sideX, y, z);
             
@@ -1013,7 +1046,7 @@ public class SceneFishesAppListener extends BaseAppListener {
         // Model batches
         // defaultBatch uses default shader with numBones=20 for GLTF skeletons
         DefaultShader.Config defaultConfig = new DefaultShader.Config();
-        defaultConfig.numBones = 20;
+        defaultConfig.numBones = 80;
         this.defaultBatch = new ModelBatch(new DefaultShaderProvider(defaultConfig));
 
         // shadowReceiveBatch — Custom ShaderProvider using scene GLSL, registers programs into sceneShaders
@@ -1021,7 +1054,7 @@ public class SceneFishesAppListener extends BaseAppListener {
         final String sceneVertSrc = this.fileHandleResolver.resolve("scene_v.glsl").readString();
         final String sceneFragSrc = this.fileHandleResolver.resolve("scene_f.glsl").readString();
         final DefaultShader.Config sceneConfig = new DefaultShader.Config();
-        sceneConfig.numBones = 20;
+        sceneConfig.numBones = 80;
         sceneConfig.vertexShader = sceneVertSrc;
         sceneConfig.fragmentShader = sceneFragSrc;
         this.shadowReceiveBatch = new ModelBatch(new DefaultShaderProvider(sceneConfig) {
@@ -1037,7 +1070,7 @@ public class SceneFishesAppListener extends BaseAppListener {
         final String depthVertSrc = this.fileHandleResolver.resolve("depthmap_v.glsl").readString();
         final String depthFragSrc = this.fileHandleResolver.resolve("depthmap_f.glsl").readString();
         final DefaultShader.Config depthConfig = new DefaultShader.Config();
-        depthConfig.numBones = 20;
+        depthConfig.numBones = 80;
         depthConfig.vertexShader = depthVertSrc;
         depthConfig.fragmentShader = depthFragSrc;
         this.shadowGenBatch = new ModelBatch(new DefaultShaderProvider(depthConfig) {
@@ -1089,38 +1122,31 @@ public class SceneFishesAppListener extends BaseAppListener {
         }
 
         // Load additional numbered fish (fish1, fish2, etc.)
-        int fishIndex = 0;
-        boolean fishExists;
-        do {
-            fishIndex++;
-            String fishName = "fish" + fishIndex;
-            fishExists = this.fileHandleResolver.resolve(fishName + ".gltf").exists()
-                      || this.fileHandleResolver.resolve(fishName + ".g3db").exists();
-            if (fishExists) {
-                FishResource fr = FishResource.Builder.create().modelName(fishName).shadowModelName(fishName + "_shadow").build();
+        for (int i = 1; i <= 10; i++) { // Check up to fish10 even if some are missing
+            String fishName = "fish" + i;
+            if (this.fileHandleResolver.resolve(fishName + ".gltf").exists()
+                    || this.fileHandleResolver.resolve(fishName + ".g3db").exists()) {
+                Log.d("SceneFishes", "Found extra fish: " + fishName);
+                float offset = (float) (Math.PI / 2.0); // Unified 90-degree offset
+                
+                FishResource fr = FishResource.Builder.create()
+                    .modelName(fishName)
+                    .shadowModelName(fishName + "_shadow")
+                    .rotationOffset(offset)
+                    .build();
                 this.fishResources.add(fr);
             }
-        } while (fishExists);
+        }
+        Log.d("SceneFishes", "Total fish resources found: " + this.fishResources.size());
+        for (FishResource fr : this.fishResources) {
+            Log.d("SceneFishes", "Fish resource: " + fr.modelName);
+        }
 
         // Load fish models
         for (Object obj : this.fishResources) {
             FishResource fr = (FishResource) obj;
             loadModel(fr.modelName);
         }
-
-        // Load shadow models and determine shadow support
-        boolean hasShadows = false;
-        for (Object obj : this.fishResources) {
-            FishResource fr = (FishResource) obj;
-            if (this.fileHandleResolver.resolve(fr.shadowModelName + ".gltf").exists()) {
-                this.assetManager.load(fr.shadowModelName + ".gltf", SceneAsset.class);
-                hasShadows = true;
-            } else if (this.fileHandleResolver.resolve(fr.shadowModelName + ".g3db").exists()) {
-                this.assetManager.load(fr.shadowModelName + ".g3db", Model.class);
-                hasShadows = true;
-            }
-        }
-        this.shadowQuality = hasShadows ? 100 : 0;
 
         // Mark as loading
         this.isLoading = true;
