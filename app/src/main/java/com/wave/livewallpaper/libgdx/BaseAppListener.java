@@ -62,7 +62,15 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
                 return absoluteHandle;
             }
             FileHandle wallpaperHandle = Gdx.files.absolute(BaseAppListener.this.wallpaperDiskPath + "/" + str);
-            return wallpaperHandle.exists() ? wallpaperHandle : Gdx.files.internal(str);
+            if (wallpaperHandle.exists()) {
+                return wallpaperHandle;
+            }
+            // Fallback to common shaders folder in assets
+            FileHandle shaderHandle = Gdx.files.internal("shaders/" + str);
+            if (shaderHandle.exists()) {
+                return shaderHandle;
+            }
+            return Gdx.files.internal(str);
         }
     };
 
