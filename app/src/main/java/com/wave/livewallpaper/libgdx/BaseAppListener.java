@@ -173,7 +173,7 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
         SharedPreferences vfxSettings = this.context.getSharedPreferences("vfx_settings", Context.MODE_PRIVATE);
         this.touchRippleEnabled = vfxSettings.getBoolean("touch_ripple_enabled_" + wallpaperId, true);
         String vfxName = vfxSettings.getString("touch_vfx_name_" + wallpaperId, "water");
-        this.activeTouchVfx = VfxLibrary.getByName(vfxName);
+        this.activeTouchVfx = VfxLibrary.getVfx(this.context, vfxName, "touch");
         
         this.keyguardManager = (KeyguardManager) this.context.getSystemService("keyguard");
         if (this.rewardPopup == null) {
@@ -224,7 +224,7 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
         
         // Load active touch VFX
         String touchVfxName = vfxPrefs.getString("touch_vfx_name_" + wallpaperId, "water");
-        this.activeTouchVfx = VfxLibrary.getByName(touchVfxName);
+        this.activeTouchVfx = VfxLibrary.getVfx(this.context, touchVfxName, "touch");
         if (!this.activeTouchVfx.isEmpty() && !this.activeTouchVfx.isWaterVfx) {
             this.vfxParticleRenderer.loadTouchParticle(this.activeTouchVfx);
         }
@@ -232,7 +232,7 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
 
         // Load active overlay VFX
         String overlayVfxName = vfxPrefs.getString("overlay_vfx_name_" + wallpaperId, "none");
-        this.activeOverlayVfx = VfxLibrary.getByName(overlayVfxName);
+        this.activeOverlayVfx = VfxLibrary.getVfx(this.context, overlayVfxName, "overlay");
         if (!this.activeOverlayVfx.isEmpty()) {
             this.vfxParticleRenderer.loadBackgroundParticle(this.activeOverlayVfx);
         }

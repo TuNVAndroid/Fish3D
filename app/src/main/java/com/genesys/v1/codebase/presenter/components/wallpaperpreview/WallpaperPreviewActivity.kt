@@ -102,8 +102,8 @@ class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication
         val vfxOptions = listOf(
             TouchVfxOption("none", getString(R.string.vfx_none), VfxParticle.EMPTY, R.drawable.ic_launcher_foreground),
             TouchVfxOption("water", getString(R.string.vfx_water), VfxLibrary.WATER_VFX, R.drawable.ic_launcher_foreground),
-            TouchVfxOption("snow", getString(R.string.vfx_snow), VfxLibrary.SNOW_VFX, R.drawable.ic_launcher_foreground),
-            TouchVfxOption("usa", getString(R.string.vfx_usa), VfxLibrary.USA_VFX, R.drawable.ic_launcher_foreground)
+            TouchVfxOption("snow", getString(R.string.vfx_snow), VfxLibrary.getVfx(this, "snow", "touch"), R.drawable.ic_launcher_foreground),
+            TouchVfxOption("usa", getString(R.string.vfx_usa), VfxLibrary.getVfx(this, "usa", "touch"), R.drawable.ic_launcher_foreground)
         )
         // Find current selected from prefs
         val currentVfxName = vfxPrefs.getString("touch_vfx_name_$wallpaperId", "water") ?: "water"
@@ -134,8 +134,8 @@ class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication
         val rvOverlayVfx = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvOverlayVfx)
         val overlayOptions = listOf(
             TouchVfxOption("none", getString(R.string.vfx_none), VfxParticle.EMPTY, R.drawable.ic_launcher_foreground),
-            TouchVfxOption("love", getString(R.string.vfx_love), VfxLibrary.LOVE_VFX, R.drawable.ic_launcher_foreground),
-            TouchVfxOption("windowrain", getString(R.string.vfx_windowrain), VfxLibrary.WINDOWRAIN_VFX, R.drawable.ic_launcher_foreground)
+            TouchVfxOption("love", getString(R.string.vfx_love), VfxLibrary.getVfx(this, "love", "overlay"), R.drawable.ic_launcher_foreground),
+            TouchVfxOption("windowrain", getString(R.string.vfx_windowrain), VfxLibrary.getVfx(this, "windowrain", "overlay"), R.drawable.ic_launcher_foreground)
         )
         val currentOverlayName = vfxPrefs.getString("overlay_vfx_name_$wallpaperId", "none") ?: "none"
         
