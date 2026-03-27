@@ -168,36 +168,6 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
         this.viewport = new ScreenViewport();
         this.spriteBatch = new SpriteBatch();
         
-        // Load persistent VFX settings
-        String wallpaperId = WallpaperSelectionManager.getWallpaperIdFromPath(this.wallpaperDiskPath);
-        SharedPreferences vfxSettings = this.context.getSharedPreferences("vfx_settings", Context.MODE_PRIVATE);
-        this.touchRippleEnabled = vfxSettings.getBoolean("touch_ripple_enabled_" + wallpaperId, true);
-        String vfxName = vfxSettings.getString("touch_vfx_name_" + wallpaperId, "water");
-        this.activeTouchVfx = VfxLibrary.getVfx(this.context, vfxName, "touch");
-        
-        this.keyguardManager = (KeyguardManager) this.context.getSystemService("keyguard");
-        if (this.rewardPopup == null) {
-            initRewardPopup();
-        }
-        if (isVfxEnabled() && this.vfxParticleRenderer == null) {
-            VfxParticleRenderer renderer = new VfxParticleRenderer(this.context, this.assetManager, this.wallpaperDiskPath);
-            this.vfxParticleRenderer = renderer;
-            try {
-                renderer.create();
-            } catch (Exception e2) {
-                Log.e("SceneAppListener", "create", e2);
-            }
-        }
-        if (this.showFps) {
-            BitmapFont font = new BitmapFont();
-            this.fpsFont = font;
-            font.setColor(1.0f, 1.0f, 1.0f, 1.0f);
-            this.fpsFont.getData().setScale(2.5f);
-            OrthographicCamera cam = new OrthographicCamera(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-            this.debugCamera = cam;
-            cam.position.set(cam.viewportWidth / 2.0f, cam.viewportHeight / 2.0f, 0.0f);
-            this.debugCamera.update();
-        }
         sendShowEventPreviewPlusApplied();
         if (this.debugCamera == null) {
             OrthographicCamera cam = new OrthographicCamera(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
@@ -207,16 +177,41 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
         initVfx();
     }
 
+    public void reloadVfxSettings() {
+        if (this.vfxParticleRenderer == null) return;
+        
+        String wallpaperId = WallpaperSelectionManager.getWallpaperIdFromPath(this.wallpaperDiskPath);
+        SharedPreferences vfxPrefs = this.context.getSharedPreferences("vfx_settings", Context.MODE_PRIVATE);
+        
+        // Reload touch VFX
+        String touchVfxName = vfxPrefs.getString("touch_vfx_name_" + wallpaperId, "water");
+        VfxParticle newTouchVfx = VfxLibrary.getVfx(this.context, touchVfxName, "touch");
+        if (newTouchVfx != null && (this.activeTouchVfx == null || !newTouchVfx.name.equals(this.activeTouchVfx.name))) {
+            setTouchVfx(newTouchVfx);
+        }
+        this.touchRippleEnabled = vfxPrefs.getBoolean("touch_ripple_enabled_" + wallpaperId, true);
+
+        // Reload overlay VFX
+        String overlayVfxName = vfxPrefs.getString("overlay_vfx_name_" + wallpaperId, "none");
+        VfxParticle newOverlayVfx = VfxLibrary.getVfx(this.context, overlayVfxName, "overlay");
+        if (newOverlayVfx != null && (this.activeOverlayVfx == null || !newOverlayVfx.name.equals(this.activeOverlayVfx.name))) {
+            setOverlayVfx(newOverlayVfx);
+        }
+    }
+
     private void initVfx() {
         VfxWater water = new VfxWater(this.wallpaperDiskPath);
         this.vfxWater = water;
         water.create();
-        VfxParticleRenderer renderer = new VfxParticleRenderer(this.context, this.assetManager, this.wallpaperDiskPath);
-        this.vfxParticleRenderer = renderer;
-        try {
-            renderer.create();
-        } catch (Exception e2) {
-            Log.e("SceneAppListener", "create", e2);
+        
+        if (this.vfxParticleRenderer == null) {
+            VfxParticleRenderer renderer = new VfxParticleRenderer(this.context, this.assetManager, this.wallpaperDiskPath);
+            this.vfxParticleRenderer = renderer;
+            try {
+                renderer.create();
+            } catch (Exception e2) {
+                Log.e("BaseAppListener", "vfxParticleRenderer.create() failed", e2);
+            }
         }
         
         String wallpaperId = WallpaperSelectionManager.getWallpaperIdFromPath(this.wallpaperDiskPath);
@@ -225,8 +220,16 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
         // Load active touch VFX
         String touchVfxName = vfxPrefs.getString("touch_vfx_name_" + wallpaperId, "water");
         this.activeTouchVfx = VfxLibrary.getVfx(this.context, touchVfxName, "touch");
-        if (!this.activeTouchVfx.isEmpty() && !this.activeTouchVfx.isWaterVfx) {
-            this.vfxParticleRenderer.loadTouchParticle(this.activeTouchVfx);
+        if (!this.activeTouchVfx.isEmpty()) {
+            if (this.activeTouchVfx.isWaterVfx) {
+                if (this.vfxWater != null) {
+                    this.vfxWater.initWater();
+                    this.touchRippleEnabled = true;
+                }
+            } else {
+                this.vfxParticleRenderer.loadTouchParticle(this.activeTouchVfx);
+                this.touchRippleEnabled = false;
+            }
         }
         this.touchRippleEnabled = vfxPrefs.getBoolean("touch_ripple_enabled_" + wallpaperId, true);
 
@@ -244,8 +247,13 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
 
     public void setTouchVfx(VfxParticle vfx) {
         this.activeTouchVfx = vfx;
+        
         if (vfx.isWaterVfx) {
             this.touchRippleEnabled = true;
+            // Ensure vfxWater is initialized if it wasn't by config
+            if (this.vfxWater != null) {
+                this.vfxWater.initWater();
+            }
         } else {
             this.touchRippleEnabled = false;
         }
@@ -469,19 +477,48 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
         }
     }
 
+    protected void renderPrePass() {
+        // Overridden by subclasses for shadows/depth passes
+    }
+
     @Override
     public void render() {
         try {
             this.deltaTime = Gdx.graphics.getDeltaTime();
-            this.lockscreenRenderer.render();
-            VfxWater water = this.vfxWater;
-            if (water != null) {
-                water.render();
+            Log.v("BaseAppListener", "Render cycle started. DeltaTime: " + this.deltaTime);
+            
+            // 1. Run Pre-passes (Shadows, DepthMap) OUTSIDE the main scene FB
+            renderPrePass();
+            
+            // 2. Handle water VFX pipeline
+            boolean waterActive = isWaterEnabled();
+            Log.v("BaseAppListener", "Water VFX active: " + waterActive);
+            if (waterActive) {
+                beginFrameBuffer();
+                Log.v("BaseAppListener", "FrameBuffer started for water VFX.");
             }
+            
+            // 3. Always clear the current target (either screen or FB)
+            LibgdxUtils.clearScreen();
+            
+            // Subclasses render their scene contents in renderCore
+            if (waterActive) Log.v("BaseApp", "Rendering core into FB");
+            renderCore();
+
+            if (waterActive) {
+                endFrameBuffer();
+                if (this.vfxWater != null && this.frameBuffer != null) {
+                    this.vfxWater.setFrameBuffer(this.frameBuffer);
+                    this.vfxWater.render();
+                }
+            }
+
+            // Overlay elements on top
             RewardPopup popup = this.rewardPopup;
             if (popup != null) {
                 popup.render();
             }
+            
             VfxParticleRenderer renderer = this.vfxParticleRenderer;
             if (renderer != null) {
                 renderer.render();
@@ -490,6 +527,10 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
                     vp.apply();
                 }
             }
+            
+            this.lockscreenRenderer.render();
+            
+            // FPS Debug
             if (this.showFps) {
                 try {
                     this.debugCamera.update();
@@ -511,8 +552,12 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
                 }
             }
         } catch (Throwable th) {
-            throw th;
+            Log.e("BaseAppListener", "render error", th);
         }
+    }
+
+    protected void renderCore() {
+        // To be overridden by subclasses (e.g. VideoAppListener or SceneFishesAppListener)
     }
 
     @Override
@@ -550,6 +595,7 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
 
     @Override
     public void resume() {
+        reloadVfxSettings();
         if (Gdx.gl != null) {
             RewardPopup popup = this.rewardPopup;
             if (popup != null) {

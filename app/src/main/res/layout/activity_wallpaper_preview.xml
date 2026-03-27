@@ -69,12 +69,14 @@
 
         <!-- Touch VFX Selection area -->
         <LinearLayout
+            android:id="@+id/llTouchVfxSection"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:layout_marginBottom="16dp">
 
             <TextView
+                android:id="@+id/tvTouchVfxTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/touch_vfx_selection"
@@ -98,12 +100,14 @@
         
         <!-- Overlay VFX Selection area -->
         <LinearLayout
+            android:id="@+id/llOverlayVfxSection"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:layout_marginBottom="24dp">
 
             <TextView
+                android:id="@+id/tvOverlayVfxTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/overlay_vfx_selection"

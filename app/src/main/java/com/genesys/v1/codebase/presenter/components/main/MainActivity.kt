@@ -25,6 +25,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         private const val ASSETS_GOLDFISH = "com.wave.livewallpaper.livefisheslivewallpaper"
         /** Test Fish bundle — prototype GLTF */
         private const val ASSETS_TEST_FISH = "test_fish"
+        /** Red Devil bundle — Video */
+        private const val ASSETS_RED_DEVIL = "reddevil"
 
         private const val REQUEST_SET_WALLPAPER = 1002
     }
@@ -40,6 +42,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         loadPreviewImage(ASSETS_CLOWNFISH, viewBinding.ivPreviewGltf)
         loadPreviewImage(ASSETS_GOLDFISH, viewBinding.ivPreviewG3db)
         loadPreviewImage(ASSETS_TEST_FISH, viewBinding.ivPreviewTestFish)
+        loadPreviewImage(ASSETS_RED_DEVIL, viewBinding.ivPreviewRedDevil)
     }
 
     override fun initListeners() {
@@ -59,11 +62,17 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         viewBinding.cardTestFish.setOnClickListener { openPreview(ASSETS_TEST_FISH) }
         viewBinding.btnPreviewTestFish.setOnClickListener { openPreview(ASSETS_TEST_FISH) }
         viewBinding.btnSetTestFish.setOnClickListener { applyWallpaperDirect(ASSETS_TEST_FISH) }
+
+        // ---- Red Devil card ----
+        viewBinding.cardRedDevil.setOnClickListener { openPreview(ASSETS_RED_DEVIL) }
+        viewBinding.btnPreviewRedDevil.setOnClickListener { openPreview(ASSETS_RED_DEVIL) }
+        viewBinding.btnSetRedDevil.setOnClickListener { applyWallpaperDirect(ASSETS_RED_DEVIL) }
     }
 
     private fun loadPreviewImage(assetsPath: String, imageView: android.widget.ImageView) {
-        // Try preview_img.jpg first, then fallback to previewLW.jpg
-        val candidates = listOf("preview_img.jpg", "previewLW.jpg")
+        // Try preview_img.jpg first, then fallback to previewLW.jpg or preview.jpg
+        val candidates = listOf("preview_img.jpg", "previewLW.jpg", "preview.jpg")
+
         for (name in candidates) {
             try {
                 val inputStream = assets.open("$assetsPath/$name")

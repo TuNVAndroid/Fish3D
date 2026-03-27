@@ -75,7 +75,8 @@ public class Water {
     }
 
     public void addRippleScaled(float x, float y) {
-        addRipple((x * 0.6f) + ((this.screenWidth * 0.39999998f) / 2.0f), (y * 0.6f) + ((this.screenHeight * 0.39999998f) / 2.0f));
+        // Now just pass through since grid normalization handles it
+        addRipple(x, y);
     }
 
     public void renderWater(FrameBuffer frameBuffer) {
@@ -122,7 +123,7 @@ public class Water {
         Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
         this.shader.begin();
         this.shader.setUniformi("u_map", 1);
-        this.shader.setUniformf("u_map_size", 0.6f);
+        this.shader.setUniformf("u_map_size", 1.0f);
         this.shader.setUniformf("u_pixel", this.pixelSize);
         this.shader.end();
         this.camera.update();

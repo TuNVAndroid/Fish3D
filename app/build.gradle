@@ -140,6 +140,10 @@ dependencies {
     implementation libs.immersionbar.ktx
     implementation libs.immersionbar.components
 
+    // ExoPlayer (Media3)
+    implementation libs.androidx.media3.exoplayer
+    implementation libs.androidx.media3.common
+
 
     //Testing
     testImplementation libs.junit

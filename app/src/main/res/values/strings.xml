@@ -24,6 +24,9 @@
     <string name="format_g3db">G3DB</string>
     <string name="test_fish_title">Test Fish Lab</string>
     <string name="test_fish_subtitle">Prototype set • Custom assets</string>
+    <string name="red_devil_title">Red Devil</string>
+    <string name="red_devil_subtitle">Cinematic deep sea creature video wallpaper</string>
+    <string name="format_video">VIDEO</string>
     <string name="water_ripple_effect">Water Ripple Effect</string>
     <string name="touch_vfx_selection">Touch Effects (VFX)</string>
     <string name="overlay_vfx_selection">Overlay Effects</string>

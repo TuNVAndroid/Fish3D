@@ -19,11 +19,13 @@ public class WallpaperSelectionManager {
     public static final String WALLPAPER_CLOWNFISH = "clownfish";
     public static final String WALLPAPER_GOLDFISH = "goldfish";
     public static final String WALLPAPER_TEST_FISH = "test_fish";
+    public static final String WALLPAPER_RED_DEVIL = "reddevil";
     
     // Asset paths
     private static final String ASSETS_CLOWNFISH = "com.wave.livewallpaper.clownfishes";
     private static final String ASSETS_GOLDFISH = "com.wave.livewallpaper.livefisheslivewallpaper";
     private static final String ASSETS_TEST_FISH = "test_fish";
+    private static final String ASSETS_RED_DEVIL = "reddevil";
     
     private final Context context;
     private final SharedPreferences prefs;
@@ -123,6 +125,8 @@ public class WallpaperSelectionManager {
                 return ASSETS_GOLDFISH;
             case WALLPAPER_TEST_FISH:
                 return ASSETS_TEST_FISH;
+            case WALLPAPER_RED_DEVIL:
+                return ASSETS_RED_DEVIL;
             default:
                 return null;
         }
@@ -138,6 +142,8 @@ public class WallpaperSelectionManager {
             return WALLPAPER_GOLDFISH;
         } else if (path.contains(ASSETS_TEST_FISH) || path.contains("test_fish")) {
             return WALLPAPER_TEST_FISH;
+        } else if (path.contains(ASSETS_RED_DEVIL) || path.contains("reddevil")) {
+            return WALLPAPER_RED_DEVIL;
         }
         // Log warning for unknown path
         Log.w("WallpaperSelectionManager", "Unknown wallpaper path: " + path + ", defaulting to clownfish");
@@ -161,6 +167,6 @@ public class WallpaperSelectionManager {
      * Get all available wallpaper IDs
      */
     public String[] getAvailableWallpapers() {
-        return new String[] { WALLPAPER_CLOWNFISH, WALLPAPER_GOLDFISH, WALLPAPER_TEST_FISH };
+        return new String[] { WALLPAPER_CLOWNFISH, WALLPAPER_GOLDFISH, WALLPAPER_TEST_FISH, WALLPAPER_RED_DEVIL };
     }
 }

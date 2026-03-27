@@ -28,6 +28,7 @@ import com.wave.livewallpaper.data.LiveWallpaperConfigReader.readSceneConfig
 import com.wave.livewallpaper.data.SceneConfig
 import com.wave.livewallpaper.util.Utility
 import androidx.core.content.edit
+import com.wave.livewallpaper.data.LiveWallpaperConfig
 import com.wave.livewallpaper.vfx.VfxLibrary
 import com.wave.livewallpaper.vfx.VfxParticle
 
@@ -63,7 +64,13 @@ class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication
         }
 
         setupFragment(wallpaperPath, savedInstanceState)
-        setupButtons()
+        
+        // Read config to determine wallpaper type
+        val configPath = java.io.File(wallpaperPath, "config.json")
+        val config = if (configPath.exists()) LiveWallpaperConfigReader.read(configPath) else LiveWallpaperConfig.EMPTY
+        val isFishWallpaper = config.type == "3dscene"
+        
+        setupButtons(isFishWallpaper)
         animateUI()
     }
 
@@ -88,7 +95,7 @@ class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication
         }
     }
 
-    private fun setupButtons() {
+    private fun setupButtons(isFishWallpaper: Boolean) {
         findViewById<View>(R.id.btnBack).setOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
@@ -154,6 +161,34 @@ class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication
                     Log.e("VfxPreview", "Failed to update overlay vfx", e)
                 }
             }
+        }
+
+        // --- Redistribute functionality ---
+        if (isFishWallpaper) {
+            // Loại 1: 3D Fish
+            // Hide selection UI sections
+            findViewById<View>(R.id.llTouchVfxSection)?.visibility = View.GONE
+            findViewById<View>(R.id.llOverlayVfxSection)?.visibility = View.GONE
+            
+            // Force water VFX if not already set or if it was "none"
+            if (currentVfxName == "none" || currentVfxName == "") {
+                vfxPrefs.edit {
+                    putBoolean("touch_ripple_enabled_$wallpaperId", true)
+                    putString("touch_vfx_name_$wallpaperId", "water")
+                }
+                // Update running listener immediately
+                gdxFragment?.let { fragment ->
+                    try {
+                        val listener = (com.badlogic.gdx.Gdx.app.applicationListener as? GenericAppListener)?.getDelegate()
+                        listener?.setTouchVfx(VfxLibrary.WATER_VFX)
+                    } catch (e: Exception) {}
+                }
+            }
+        } else {
+            // Loại 2: Live wallpaper thường
+            // Show selection UI sections
+            findViewById<View>(R.id.llTouchVfxSection)?.visibility = View.VISIBLE
+            findViewById<View>(R.id.llOverlayVfxSection)?.visibility = View.VISIBLE
         }
 
         findViewById<View>(R.id.btnApplyWallpaper).setOnClickListener {

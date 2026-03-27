@@ -46,19 +46,15 @@ import net.mgsx.gltf.scene3d.scene.SceneAsset;
 public class SceneFishesAppListener extends BaseAppListener {
     private ModelBatch shadowReceiveBatch;
     private ModelBatch shadowGenBatch;
-    private SpriteBatch waterSpriteBatch;
     private boolean isLoading;
     private final List<FishResource> fishResources;
     private ModelInstance backgroundModel;
     private Array idleFishes;
     private Array activeFishes;
     private Array activeBaits;  // New: Array to store active baits
-    private Water waterSimulation;
     private Array sceneShaders;
     private Array depthShaders;
-    private ShaderProgram waterShader;
     private FrameBuffer shadowFrameBuffer;
-    private FrameBuffer sceneFrameBuffer;
     private int shadowQuality;
     private float viewportHalfWidth;
     private float viewportHalfHeight;
@@ -234,8 +230,10 @@ public class SceneFishesAppListener extends BaseAppListener {
                     
                     // Create water ripple at bait position
                     Vector3 screenPos = SceneFishesAppListener.this.sceneCamera.project(new Vector3(baitPos));
-                    SceneFishesAppListener.this.waterSimulation.addRippleAtScreenPos(
-                        screenPos.x, Gdx.graphics.getHeight() - screenPos.y);
+                    if (SceneFishesAppListener.this.vfxWater != null) {
+                        SceneFishesAppListener.this.vfxWater.addRipple(
+                            screenPos.x, Gdx.graphics.getHeight() - screenPos.y);
+                    }
                     
                     // Slow down significantly after eating
                     this.currentSpeed = this.baseSpeed * 0.3f;
@@ -531,138 +529,7 @@ public class SceneFishesAppListener extends BaseAppListener {
         public float rotationOffset;
     }
 
-    private class Water {
-        private int screenWidth;
-        private int screenHeight;
-        private int[] waveBuffer1;
-        private int[] waveBuffer2;
-        private int[] smoothedBuffer;
-        private ByteBuffer textureData;
-        private int textureId;
-        private boolean isDirty;
-        private float pixelSize;
-        private long lastRippleTime;
-
-        public void addRippleAtScreenPos(float f2, float f3) {
-            addRipple(f2, f3);
-        }
-
-        private void addRipple(float f2, float f3) {
-            int i2 = (int) ((f2 / this.screenWidth) * 47.0f);
-            int i3 = (int) ((1.0f - (f3 / this.screenHeight)) * 47.0f);
-            int iMax = Math.max(1, Math.min(46, i3 + 1));
-            int iMax2 = Math.max(1, Math.min(46, i2 - 1));
-            int iMax3 = Math.max(1, Math.min(46, i2 + 1));
-            for (int iMax4 = Math.max(1, Math.min(46, i3 - 1)); iMax4 <= iMax; iMax4++) {
-                for (int i4 = iMax2; i4 <= iMax3; i4++) {
-                    int i5 = (iMax4 * 48) + i4;
-                    this.waveBuffer1[i5] = 2260;
-                    this.waveBuffer2[i5] = 2260;
-                }
-            }
-        }
-
-        public void renderWaterOverlay() {
-            Gdx.gl.glActiveTexture(GL20.GL_TEXTURE1);
-            Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, this.textureId);
-            if (this.isDirty) {
-                this.isDirty = false;
-                for (int i2 = 0; i2 < 48; i2++) {
-                    int i3 = 0;
-                    while (i3 < 48) {
-                        int iMax = Math.max(0, Math.min(47, i2 + 1));
-                        int iMax2 = Math.max(0, Math.min(47, i3 - 1));
-                        int i4 = i3 + 1;
-                        int iMax3 = Math.max(0, Math.min(47, i4));
-                        int i5 = 0;
-                        int i6 = 0;
-                        for (int iMax4 = Math.max(0, Math.min(47, i2 - 1)); iMax4 <= iMax; iMax4++) {
-                            for (int i7 = iMax2; i7 <= iMax3; i7++) {
-                                i5 += this.waveBuffer2[(iMax4 * 48) + i7];
-                                i6++;
-                            }
-                        }
-                        this.smoothedBuffer[(i2 * 48) + i3] = i5 / (i6 + 3);
-                        i3 = i4;
-                    }
-                }
-                for (int i8 = 0; i8 < 48; i8++) {
-                    for (int i9 = 0; i9 < 48; i9++) {
-                        int i10 = (i8 * 48) + i9;
-                        this.textureData.put(i10, (byte) (((this.smoothedBuffer[i10] + 3046) * 255) / 6159));
-                    }
-                }
-                Gdx.gl.glTexSubImage2D(GL20.GL_TEXTURE_2D, 0, 0, 0, 48, 48, GL20.GL_LUMINANCE, 5121, this.textureData);
-            }
-            Gdx.gl.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            Gdx.gl.glClear(16384);
-            Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
-            SceneFishesAppListener.this.waterShader.begin();
-            SceneFishesAppListener.this.waterShader.setUniformi("u_map", 1);
-            SceneFishesAppListener.this.waterShader.setUniformf("u_map_size", 0.6f);
-            SceneFishesAppListener.this.waterShader.setUniformf("u_pixel", this.pixelSize);
-            SceneFishesAppListener.this.waterShader.end();
-            SceneFishesAppListener.this.orthoCamera.update();
-            SceneFishesAppListener.this.waterSpriteBatch.setProjectionMatrix(SceneFishesAppListener.this.orthoCamera.combined);
-            SceneFishesAppListener.this.waterSpriteBatch.begin();
-            SceneFishesAppListener.this.waterSpriteBatch.draw(SceneFishesAppListener.this.sceneFrameBuffer.getColorBufferTexture(), 0.0f, 0.0f, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-            SceneFishesAppListener.this.waterSpriteBatch.end();
-        }
-
-        public void updateSimulation(float f2) {
-            long jCurrentTimeMillis = System.currentTimeMillis();
-            if (jCurrentTimeMillis - this.lastRippleTime > 2000.0f) {
-                if (Math.random() > 0.5d) {
-                    addRipple(((double) ((float) Math.random())) > 0.5d ? Gdx.graphics.getWidth() : 0, ((float) Math.random()) * Gdx.graphics.getHeight());
-                } else {
-                    addRipple(((float) Math.random()) * Gdx.graphics.getWidth(), ((double) ((float) Math.random())) > 0.5d ? Gdx.graphics.getHeight() : 0);
-                }
-                this.lastRippleTime = jCurrentTimeMillis;
-            }
-            for (int i2 = 1; i2 < 47; i2++) {
-                for (int i3 = 1; i3 < 47; i3++) {
-                    int i4 = (i2 * 48) + i3;
-                    int[] iArr = this.waveBuffer1;
-                    int i5 = (((iArr[i4 - 1] + iArr[i4 + 1]) + iArr[i4 - 48]) + iArr[i4 + 48]) >> 1;
-                    int[] iArr2 = this.waveBuffer2;
-                    int i6 = iArr2[i4];
-                    float f3 = i5 - i6;
-                    int i7 = (int) (f3 - (f3 * f2));
-                    if (i7 <= -3046) {
-                        i7 = -3046;
-                    } else if (i7 > 3113) {
-                        i7 = 3113;
-                    }
-                    if (i6 != i7) {
-                        this.isDirty = true;
-                    }
-                    iArr2[i4] = i7;
-                }
-            }
-            int[] iArr3 = this.waveBuffer1;
-            this.waveBuffer1 = this.waveBuffer2;
-            this.waveBuffer2 = iArr3;
-        }
-
-        private Water() {
-            this.screenWidth = Gdx.graphics.getWidth();
-            this.screenHeight = Gdx.graphics.getHeight();
-            this.waveBuffer1 = new int[GL20.GL_CW];
-            this.waveBuffer2 = new int[GL20.GL_CW];
-            this.smoothedBuffer = new int[GL20.GL_CW];
-            this.textureData = ByteBuffer.allocateDirect(GL20.GL_CW);
-            int iGlGenTexture = Gdx.gl.glGenTexture();
-            this.textureId = iGlGenTexture;
-            Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, iGlGenTexture);
-            Gdx.gl.glTexParameterf(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MAG_FILTER, 9729.0f);
-            Gdx.gl.glTexParameterf(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MIN_FILTER, 9729.0f);
-            Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_CLAMP_TO_EDGE);
-            Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_T, GL20.GL_CLAMP_TO_EDGE);
-            Gdx.gl.glTexImage2D(GL20.GL_TEXTURE_2D, 0, GL20.GL_LUMINANCE, 48, 48, 0, GL20.GL_LUMINANCE, 5121, null);
-            this.isDirty = true;
-            this.pixelSize = 0.03472222f;
-        }
-    }
+    // Water simulation is now handled by the base class.
 
     public SceneFishesAppListener(String str, LiveWallpaperConfig liveWallpaperConfig, Context context) {
         super(str, liveWallpaperConfig, context);
@@ -822,16 +689,6 @@ public class SceneFishesAppListener extends BaseAppListener {
     private void renderScene() {
         ModelInstance modelInstance;
         ModelInstance modelInstance2;
-        if (this.sceneFrameBuffer == null) {
-            this.sceneFrameBuffer = new FrameBuffer(Pixmap.Format.RGBA8888, Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), true);
-        }
-        this.sceneFrameBuffer.begin();
-        Gdx.gl.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        Gdx.gl.glClear(16640);
-        
-        // Debug GL state
-//        Log.v("SceneFishes", "GL depth test enabled: " + Gdx.gl.glIsEnabled(GL20.GL_DEPTH_TEST));
-//        Log.v("SceneFishes", "GL cull face enabled: " + Gdx.gl.glIsEnabled(GL20.GL_CULL_FACE));
         
         ModelBatch modelBatch = this.defaultBatch;
         if (this.shadowQuality > 0) {
@@ -900,7 +757,6 @@ public class SceneFishesAppListener extends BaseAppListener {
         }
         
         this.defaultBatch.end();
-        this.sceneFrameBuffer.end();
     }
 
     private ShaderProgram compileShader(String str, String str2) {
@@ -968,7 +824,7 @@ public class SceneFishesAppListener extends BaseAppListener {
             }
         }
         
-        this.waterSimulation.updateSimulation(deltaTime);
+        // Simulation update is now handled by vfxWater.render() in BaseAppListener
     }
 
     private void spawnHelperFish(Bait bait) {
@@ -1082,13 +938,7 @@ public class SceneFishesAppListener extends BaseAppListener {
             }
         });
 
-        // Water shader (compiled outside shadow quality check — always available)
-        ShaderProgram waterShader = compileShader("water", "");
-        this.waterShader = waterShader;
-        this.waterSpriteBatch = new SpriteBatch(1000, this.waterShader);
-
-        // Water simulation
-        this.waterSimulation = new Water();
+        // Water simulation is now handled by BaseAppListener (vfxWater)
 
         // Fish arrays
         this.idleFishes = new Array();
@@ -1192,10 +1042,6 @@ public class SceneFishesAppListener extends BaseAppListener {
         if (modelBatch3 != null) {
             modelBatch3.dispose();
         }
-        SpriteBatch spriteBatch = this.waterSpriteBatch;
-        if (spriteBatch != null) {
-            spriteBatch.dispose();
-        }
         AssetManager assetManager = this.assetManager;
         if (assetManager != null) {
             assetManager.dispose();
@@ -1203,10 +1049,6 @@ public class SceneFishesAppListener extends BaseAppListener {
         FrameBuffer frameBuffer = this.shadowFrameBuffer;
         if (frameBuffer != null) {
             frameBuffer.dispose();
-        }
-        FrameBuffer frameBuffer2 = this.sceneFrameBuffer;
-        if (frameBuffer2 != null) {
-            frameBuffer2.dispose();
         }
         Array array = this.idleFishes;
         if (array != null) {
@@ -1244,11 +1086,14 @@ public class SceneFishesAppListener extends BaseAppListener {
             }
             this.depthShaders.clear();
         }
-        ShaderProgram shaderProgram = this.waterShader;
-        if (shaderProgram != null) {
-            shaderProgram.dispose();
-        }
         super.dispose();
+    }
+
+    @Override
+    protected void renderPrePass() {
+        if (!this.isLoading && this.shadowQuality > 0) {
+            renderShadowMap();
+        }
     }
 
     @Override // com.wave.livewallpaper.libgdx.BaseAppListener
@@ -1285,11 +1130,11 @@ public class SceneFishesAppListener extends BaseAppListener {
             }
             
             if (isDoubleTap) {
-                // Create bait at touch position (Flip Y to account for coordinate inversion)
-                createBaitAtScreenPosition(touchX, Gdx.graphics.getHeight() - touchY);
+                // Create bait at touch position (Screen coordinates)
+                createBaitAtScreenPosition(touchX, touchY);
                 // Ripple at bait drop position if enabled
-                if (this.touchRippleEnabled) {
-                    this.waterSimulation.addRippleAtScreenPos(touchX, Gdx.graphics.getHeight() - touchY);
+                if (this.vfxWater != null && this.touchRippleEnabled) {
+                    this.vfxWater.addRipple(touchX, touchY);
                 }
             } else {
                 // Normal touch behavior - startle fish and create water ripple
@@ -1303,8 +1148,8 @@ public class SceneFishesAppListener extends BaseAppListener {
                     }
                 }
                 // Create water ripple on single touch if enabled
-                if (this.touchRippleEnabled) {
-                    this.waterSimulation.addRippleAtScreenPos(touchX, Gdx.graphics.getHeight() - touchY);
+                if (this.vfxWater != null && this.touchRippleEnabled) {
+                    this.vfxWater.addRipple(touchX, touchY);
                 }
             }
         }
@@ -1374,33 +1219,29 @@ public class SceneFishesAppListener extends BaseAppListener {
     }
 
     @Override // com.wave.livewallpaper.libgdx.BaseAppListener, com.badlogic.gdx.ApplicationListener
-    public void render() {
-        try {
-            if (this.isLoading) {
-                LibgdxUtils.clearScreen();
-                if (this.assetManager.update()) {
-                    initScene();
-                }
+    protected void renderCore() {
+        if (this.isLoading) {
+            Log.v("SceneFishes", "Still loading assets...");
+            // BaseAppListener already clears Screen/FB, but keep it here for loading progress visibility
+            LibgdxUtils.clearScreen();
+            if (this.assetManager.update()) {
+                Log.d("SceneFishes", "Assets loaded, calling initScene()...");
+                initScene();
             }
-            if (!this.isLoading) {
-                updateScene();
-                if (this.shadowQuality > 0) {
-                    renderShadowMap();
-                }
-                renderScene();
-                this.waterSimulation.renderWaterOverlay();
-                if (Gdx.graphics.getFramesPerSecond() < 30) {
-                    this.shadowQuality = Math.max(0, this.shadowQuality - 1);
-                } else {
-                    this.shadowQuality = 100;
-                }
-                if (this.firstFrameAfterPause) {
-                    this.firstFrameAfterPause = false;
-                }
+        }
+        if (!this.isLoading) {
+            Log.v("SceneFishes", "Assets loaded, rendering frame...");
+            updateScene();
+            renderScene();
+            
+            if (Gdx.graphics.getFramesPerSecond() < 30) {
+                this.shadowQuality = Math.max(0, this.shadowQuality - 1);
+            } else {
+                this.shadowQuality = 100;
             }
-            super.render();
-        } catch (Throwable th) {
-            throw th;
+            if (this.firstFrameAfterPause) {
+                this.firstFrameAfterPause = false;
+            }
         }
     }
 
@@ -1409,11 +1250,6 @@ public class SceneFishesAppListener extends BaseAppListener {
         float f2;
         float f3;
         float f4;
-        // Recreate FrameBuffers for new screen size
-        if (this.sceneFrameBuffer != null) {
-            this.sceneFrameBuffer.dispose();
-            this.sceneFrameBuffer = null;
-        }
         if (this.shadowFrameBuffer != null) {
             this.shadowFrameBuffer.dispose();
             this.shadowFrameBuffer = null;

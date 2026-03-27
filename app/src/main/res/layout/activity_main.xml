@@ -353,6 +353,7 @@
                 </FrameLayout>
 
                 <!-- Buttons for Test Fish card -->
+                <!-- Buttons for Test Fish card -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -382,6 +383,120 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnSetTestFish"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:text="@string/set_wallpaper"
+                        android:textAllCaps="false"
+                        android:textSize="13sp"
+                        app:cornerRadius="14dp"
+                        app:icon="@drawable/ic_wallpaper"
+                        app:iconGravity="textStart"
+                        app:iconPadding="4dp"
+                        app:backgroundTint="@color/wallpaper_apply_button" />
+
+                </LinearLayout>
+
+                <!-- ========================= -->
+                <!-- CARD 4: Red Devil (Video) -->
+                <!-- ========================= -->
+                <FrameLayout
+                    android:id="@+id/cardRedDevil"
+                    android:layout_width="match_parent"
+                    android:layout_height="280dp"
+                    android:layout_marginTop="28dp"
+                    android:background="@drawable/bg_preview_card"
+                    android:clipChildren="true"
+                    android:clipToPadding="false"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <ImageView
+                        android:id="@+id/ivPreviewRedDevil"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="centerCrop"
+                        android:alpha="0.7"
+                        android:contentDescription="@string/red_devil_title" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/gradient_card_overlay" />
+
+                    <!-- Format badge -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="top|end"
+                        android:layout_margin="14dp"
+                        android:text="@string/format_video"
+                        android:textColor="@android:color/white"
+                        android:textSize="11sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="4dp"
+                        android:background="@drawable/bg_play_button"
+                        android:alpha="0.9" />
+
+                    <!-- Card info at bottom -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/red_devil_title"
+                            android:textColor="@android:color/white"
+                            android:textSize="18sp"
+                            android:fontFamily="sans-serif-medium" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/red_devil_subtitle"
+                            android:textColor="@color/wallpaper_on_surface"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                </FrameLayout>
+
+                <!-- Buttons for Red Devil card -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPreviewRedDevil"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:text="@string/preview_wallpaper"
+                        android:textAllCaps="false"
+                        android:textColor="@android:color/white"
+                        android:textSize="13sp"
+                        app:cornerRadius="14dp"
+                        app:icon="@drawable/ic_play_preview"
+                        app:iconTint="@android:color/white"
+                        app:iconGravity="textStart"
+                        app:iconPadding="4dp"
+                        app:strokeColor="@color/wallpaper_accent"
+                        app:strokeWidth="1dp"
+                        app:rippleColor="@color/wallpaper_accent" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSetRedDevil"
                         android:layout_width="0dp"
                         android:layout_height="48dp"
                         android:layout_weight="1"
