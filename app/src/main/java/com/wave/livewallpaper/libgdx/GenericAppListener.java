@@ -33,6 +33,10 @@ public class GenericAppListener implements ApplicationListener, AndroidWallpaper
     private final Object lock = new Object();
     private boolean isPreview = true;
 
+    public BaseAppListener getDelegate() {
+        return this.delegate;
+    }
+
     public GenericAppListener(String prefsKey, Context context) {
         this.wallpaperPrefsKey = prefsKey;
         this.context = context;

@@ -32,6 +32,7 @@ public class VfxParticleRenderer implements LibgdxLifecycle {
     private static String downloadsDir;
     private Context context;
     private String wallpaperDiskPath;
+    private VfxParticle activeTouchVfx;
     private AssetManager assetManager;
     private OrthographicCamera camera;
     private Viewport viewport;
@@ -50,6 +51,9 @@ public class VfxParticleRenderer implements LibgdxLifecycle {
     private boolean sequentialEmitter = false;
     private int currentEmitterIndex = -1;
     private boolean isContinuousAnimated = false;
+    private boolean hasLastTouch = false;
+    private float lastTouchX = 0.0f;
+    private float lastTouchY = 0.0f;
 
     private GestureDetector.SimpleOnGestureListener gestureListener = new GestureDetector.SimpleOnGestureListener() {
         @Override
@@ -145,8 +149,12 @@ public class VfxParticleRenderer implements LibgdxLifecycle {
             boolean useBuiltinAtlas = (hasAtlas && atlasHandle.exists()) ? false : true;
             disposeBackground();
             ParticleEffect particleEffect = new ParticleEffect();
-            if (useBuiltinAtlas) {
+            if (useBuiltinAtlas && this.textureAtlas != null) {
                 particleEffect.load(particleHandle, this.textureAtlas);
+                startBackgroundParticle(particleEffect);
+            } else if (useBuiltinAtlas) {
+                // Fallback: load textures from the same folder as the .p file
+                particleEffect.load(particleHandle, particleHandle.parent());
                 startBackgroundParticle(particleEffect);
             } else {
                 String path = particleHandle.path();
@@ -208,12 +216,15 @@ public class VfxParticleRenderer implements LibgdxLifecycle {
                 boolean useBuiltinAtlas = (hasAtlas && atlasHandle.exists()) ? false : true;
                 ParticleEffect newTemplate = new ParticleEffect();
                 this.touchParticleTemplate = newTemplate;
-                if (useBuiltinAtlas) {
+                if (useBuiltinAtlas && this.textureAtlas != null) {
                     newTemplate.load(particleHandle, this.textureAtlas);
                 } else {
-                    newTemplate.load(particleHandle, atlasHandle);
+                    Log.d("VfxParticleRenderer", "doLoadTouch: " +particleHandle +",particleHandle.parent(): "+particleHandle.parent());
+                    // Fallback: load textures from the same folder as the .p file
+                    newTemplate.load(particleHandle, particleHandle.parent());
                 }
                 this.touchParticlePool = new ParticleEffectPool(this.touchParticleTemplate, 30, 100);
+                Log.d("VfxParticleRenderer", "Successfully loaded touch particle: " + vfxParticle.name + " from " + particleHandle.path());
                 this.activeTouchEffects = new Array();
                 VfxCooldown vfxCooldown = vfxParticle.cooldown;
                 if (vfxCooldown != null) {
@@ -261,38 +272,44 @@ public class VfxParticleRenderer implements LibgdxLifecycle {
     /* JADX INFO: Access modifiers changed from: private */
     public void spawnTouchEffect(float x, float y) {
         if (this.touchParticlePool == null) {
+            Log.w("VfxParticleRenderer", "spawnTouchEffect failed: touchParticlePool is null");
             return;
         }
+
         this.cooldown.setCurrentTouch(x, y);
         if (this.cooldown.isReady()) {
-            ParticleEffectPool.PooledEffect pooledEffect = this.touchParticlePool.obtain();
-            if (this.randomEmitter) {
-                Array<ParticleEmitter> emitters = pooledEffect.getEmitters();
-                emitters.clear();
-                ParticleEmitter emitter = new ParticleEmitter(this.touchParticleTemplate.getEmitters().random());
-                emitter.reset();
-                emitters.add(emitter);
-            } else if (this.sequentialEmitter) {
-                Array<ParticleEmitter> emitters = pooledEffect.getEmitters();
-                emitters.clear();
-                Array<ParticleEmitter> templateEmitters = this.touchParticleTemplate.getEmitters();
-                int nextIndex = this.currentEmitterIndex + 1;
-                this.currentEmitterIndex = nextIndex;
-                if (nextIndex < 0) {
-                    this.currentEmitterIndex = 0;
-                }
-                if (this.currentEmitterIndex >= templateEmitters.size) {
-                    this.currentEmitterIndex = 0;
-                }
-                ParticleEmitter emitter = new ParticleEmitter(templateEmitters.get(this.currentEmitterIndex));
-                emitter.reset();
-                emitters.add(emitter);
-            }
-            pooledEffect.setPosition(x, y);
-            this.activeTouchEffects.add(pooledEffect);
-            this.cooldown.startCooldown();
+            doSpawnEffect(x, y);
             this.cooldown.setLastTouch(x, y);
+            this.cooldown.startCooldown();
         }
+    }
+
+    private void doSpawnEffect(float x, float y) {
+        if (this.touchParticlePool == null) {
+            return;
+        }
+        ParticleEffectPool.PooledEffect pooledEffect = this.touchParticlePool.obtain();
+        if (this.randomEmitter) {
+            Array<ParticleEmitter> emitters = pooledEffect.getEmitters();
+            emitters.clear();
+            ParticleEmitter emitter = new ParticleEmitter((ParticleEmitter) this.touchParticleTemplate.getEmitters().random());
+            emitter.reset();
+            emitters.add(emitter);
+        } else if (this.sequentialEmitter) {
+            Array<ParticleEmitter> emitters = pooledEffect.getEmitters();
+            emitters.clear();
+            Array<ParticleEmitter> templateEmitters = this.touchParticleTemplate.getEmitters();
+            int nextIndex = this.currentEmitterIndex + 1;
+            this.currentEmitterIndex = nextIndex;
+            if (nextIndex >= templateEmitters.size) {
+                this.currentEmitterIndex = 0;
+            }
+            ParticleEmitter emitter = new ParticleEmitter((ParticleEmitter) templateEmitters.get(this.currentEmitterIndex));
+            emitter.reset();
+            emitters.add(emitter);
+        }
+        pooledEffect.setPosition(x, y);
+        this.activeTouchEffects.add(pooledEffect);
     }
 
     @Override
@@ -360,13 +377,45 @@ public class VfxParticleRenderer implements LibgdxLifecycle {
     }
 
     public void onTouchEvent(MotionEvent motionEvent) {
-        float x = motionEvent.getX();
-        float y = motionEvent.getY();
+        int action = motionEvent.getAction();
+        float screenX = motionEvent.getX();
+        float screenY = motionEvent.getY();
+        
         Vector3 vec = this.touchUnprojectVec;
-        vec.x = x;
-        vec.y = y;
+        vec.x = screenX;
+        vec.y = screenY;
         Vector3 unprojected = this.camera.unproject(vec);
-        spawnTouchEffect(unprojected.x, unprojected.y);
+        float x = unprojected.x;
+        float y = unprojected.y;
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            this.hasLastTouch = true;
+            this.lastTouchX = x;
+            this.lastTouchY = y;
+            spawnTouchEffect(x, y);
+        } else if (action == MotionEvent.ACTION_MOVE && this.hasLastTouch) {
+            float dx = x - this.lastTouchX;
+            float dy = y - this.lastTouchY;
+            float distance = (float) Math.sqrt(dx * dx + dy * dy);
+            
+            // If the swipe is fast, interpolate points to fill gaps
+            // Use a density of about 1 particle per 20-50 units of distance
+            float stepSize = 40.0f; 
+            if (distance > stepSize) {
+                int steps = (int) (distance / stepSize);
+                for (int i = 1; i <= steps; i++) {
+                    float lerpX = this.lastTouchX + (dx * i / steps);
+                    float lerpY = this.lastTouchY + (dy * i / steps);
+                    doSpawnEffect(lerpX, lerpY);
+                }
+            } else {
+                spawnTouchEffect(x, y);
+            }
+            this.lastTouchX = x;
+            this.lastTouchY = y;
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            this.hasLastTouch = false;
+        }
     }
 
     @Override

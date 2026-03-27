@@ -796,7 +796,7 @@ public class SceneFishesAppListener extends BaseAppListener {
             this.shadowFrameBuffer = new FrameBuffer(Pixmap.Format.RGBA8888, 1024, 1024, true);
         }
         this.shadowFrameBuffer.begin();
-        Gdx.gl.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        Gdx.gl.glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         Gdx.gl.glClear(16640);
         Array.ArrayIterator it = this.depthShaders.iterator();
         while (it.hasNext()) {
@@ -1142,10 +1142,13 @@ public class SceneFishesAppListener extends BaseAppListener {
             Log.d("SceneFishes", "Fish resource: " + fr.modelName);
         }
 
-        // Load fish models
+        // Load fish models and shadows
         for (Object obj : this.fishResources) {
             FishResource fr = (FishResource) obj;
             loadModel(fr.modelName);
+            if (fr.shadowModelName != null && !fr.shadowModelName.isEmpty()) {
+                loadModel(fr.shadowModelName);
+            }
         }
 
         // Mark as loading
@@ -1248,55 +1251,62 @@ public class SceneFishesAppListener extends BaseAppListener {
         super.dispose();
     }
 
-    /* JADX WARN: Multi-variable type inference failed */
     @Override // com.wave.livewallpaper.libgdx.BaseAppListener
     public void onTouchEvent(MotionEvent motionEvent) {
-        if (this.activeFishes == null || motionEvent.getAction() != MotionEvent.ACTION_DOWN) {
+        if (this.activeFishes == null) {
             return;
         }
-        
-        long currentTime = System.currentTimeMillis();
+
+        int action = motionEvent.getAction();
         float touchX = motionEvent.getX();
         float touchY = motionEvent.getY();
-        
-        // Check for double-tap
-        boolean isDoubleTap = false;
-        if (currentTime - this.lastTouchTime < DOUBLE_TAP_TIMEOUT) {
-            float distance = (float) Math.sqrt(
-                Math.pow(touchX - this.lastTouchX, 2) + 
-                Math.pow(touchY - this.lastTouchY, 2)
-            );
-            if (distance < DOUBLE_TAP_DISTANCE) {
-                isDoubleTap = true;
-                this.lastTouchTime = 0; // Reset to prevent triple-tap sequence
-                Log.d("SceneFishes", "Double-tap detected at: " + touchX + ", " + touchY);
-            }
-        }
-        
-        if (!isDoubleTap) {
-            this.lastTouchTime = currentTime;
-            this.lastTouchX = touchX;
-            this.lastTouchY = touchY;
-        }
-        
-        if (isDoubleTap) {
-            // Create bait at touch position (Flip Y to account for coordinate inversion)
-            createBaitAtScreenPosition(touchX, Gdx.graphics.getHeight() - touchY);
-            // Ripple at bait drop position
-            this.waterSimulation.addRippleAtScreenPos(touchX, Gdx.graphics.getHeight() - touchY);
-        } else {
-            // Normal touch behavior - startle fish and create water ripple
-            float width = (Gdx.graphics.getWidth() > Gdx.graphics.getHeight() ? Gdx.graphics.getWidth() : Gdx.graphics.getHeight()) / 5.0f;
-            Array.ArrayIterator it = this.activeFishes.iterator();
-            while (it.hasNext()) {
-                Fish fish = (Fish) it.next();
-                Vector3 projected = this.sceneCamera.project(new Vector3(fish.currentPos));
-                if (Math.sqrt(Math.pow(projected.x - touchX, 2.0d) + Math.pow(projected.y - touchY, 2.0d)) < width) {
-                    fish.startleBoost();
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            long currentTime = System.currentTimeMillis();
+            
+            // Check for double-tap
+            boolean isDoubleTap = false;
+            if (currentTime - this.lastTouchTime < DOUBLE_TAP_TIMEOUT) {
+                float distance = (float) Math.sqrt(
+                    Math.pow(touchX - this.lastTouchX, 2) + 
+                    Math.pow(touchY - this.lastTouchY, 2)
+                );
+                if (distance < DOUBLE_TAP_DISTANCE) {
+                    isDoubleTap = true;
+                    this.lastTouchTime = 0; // Reset to prevent triple-tap sequence
+                    Log.d("SceneFishes", "Double-tap detected at: " + touchX + ", " + touchY);
                 }
             }
-            // Always create water ripple on single touch too
-            this.waterSimulation.addRippleAtScreenPos(touchX, Gdx.graphics.getHeight() - touchY);
+            
+            if (!isDoubleTap) {
+                this.lastTouchTime = currentTime;
+                this.lastTouchX = touchX;
+                this.lastTouchY = touchY;
+            }
+            
+            if (isDoubleTap) {
+                // Create bait at touch position (Flip Y to account for coordinate inversion)
+                createBaitAtScreenPosition(touchX, Gdx.graphics.getHeight() - touchY);
+                // Ripple at bait drop position if enabled
+                if (this.touchRippleEnabled) {
+                    this.waterSimulation.addRippleAtScreenPos(touchX, Gdx.graphics.getHeight() - touchY);
+                }
+            } else {
+                // Normal touch behavior - startle fish and create water ripple
+                float width = (Gdx.graphics.getWidth() > Gdx.graphics.getHeight() ? Gdx.graphics.getWidth() : Gdx.graphics.getHeight()) / 5.0f;
+                Array.ArrayIterator it = this.activeFishes.iterator();
+                while (it.hasNext()) {
+                    Fish fish = (Fish) it.next();
+                    Vector3 projected = this.sceneCamera.project(new Vector3(fish.currentPos));
+                    if (Math.sqrt(Math.pow(projected.x - touchX, 2.0d) + Math.pow(projected.y - touchY, 2.0d)) < width) {
+                        fish.startleBoost();
+                    }
+                }
+                // Create water ripple on single touch if enabled
+                if (this.touchRippleEnabled) {
+                    this.waterSimulation.addRippleAtScreenPos(touchX, Gdx.graphics.getHeight() - touchY);
+                }
+            }
         }
         
         super.onTouchEvent(motionEvent);
@@ -1380,8 +1390,8 @@ public class SceneFishesAppListener extends BaseAppListener {
                 renderScene();
                 this.waterSimulation.renderWaterOverlay();
                 if (Gdx.graphics.getFramesPerSecond() < 30) {
-                    this.shadowQuality--;
-                } else if (this.shadowQuality > 0) {
+                    this.shadowQuality = Math.max(0, this.shadowQuality - 1);
+                } else {
                     this.shadowQuality = 100;
                 }
                 if (this.firstFrameAfterPause) {

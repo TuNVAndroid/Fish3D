@@ -2,6 +2,7 @@ package com.wave.livewallpaper.libgdx;
 
 import android.app.KeyguardManager;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -27,6 +28,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.google.firebase.analytics.FirebaseAnalytics;
 import com.wave.keyboard.theme.utils.FirebaseHelper;
+import com.wave.livewallpaper.WallpaperSelectionManager;
 import com.wave.livewallpaper.data.LiveWallpaperConfig;
 import com.wave.livewallpaper.libgdx.reward.RewardPopup;
 import com.wave.livewallpaper.vfx.VfxLibrary;
@@ -43,9 +45,15 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
     protected FrameBuffer frameBuffer;
     protected LockscreenRenderer lockscreenRenderer;
     protected float deltaTime;
+    protected boolean touchRippleEnabled = true;
+    private VfxParticle activeTouchVfx = VfxParticle.EMPTY;
+    private VfxParticle activeOverlayVfx = VfxParticle.EMPTY;
     private RewardPopup rewardPopup;
     private VfxParticleRenderer vfxParticleRenderer;
-    private VfxWater vfxWater;
+    protected VfxWater vfxWater;
+    private boolean hasLastWater = false;
+    private float lastWaterX = 0.0f;
+    private float lastWaterY = 0.0f;
     private BitmapFont fpsFont;
     private SpriteBatch spriteBatch;
     private OrthographicCamera debugCamera;
@@ -159,6 +167,14 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
         initAssetManager();
         this.viewport = new ScreenViewport();
         this.spriteBatch = new SpriteBatch();
+        
+        // Load persistent VFX settings
+        String wallpaperId = WallpaperSelectionManager.getWallpaperIdFromPath(this.wallpaperDiskPath);
+        SharedPreferences vfxSettings = this.context.getSharedPreferences("vfx_settings", Context.MODE_PRIVATE);
+        this.touchRippleEnabled = vfxSettings.getBoolean("touch_ripple_enabled_" + wallpaperId, true);
+        String vfxName = vfxSettings.getString("touch_vfx_name_" + wallpaperId, "water");
+        this.activeTouchVfx = VfxLibrary.getByName(vfxName);
+        
         this.keyguardManager = (KeyguardManager) this.context.getSystemService("keyguard");
         if (this.rewardPopup == null) {
             initRewardPopup();
@@ -182,18 +198,91 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
             cam.position.set(cam.viewportWidth / 2.0f, cam.viewportHeight / 2.0f, 0.0f);
             this.debugCamera.update();
         }
-        VfxWater water = new VfxWater(this.wallpaperDiskPath);
-        this.vfxWater = water;
-        water.create();
         sendShowEventPreviewPlusApplied();
         if (this.debugCamera == null) {
             OrthographicCamera cam = new OrthographicCamera(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
             this.debugCamera = cam;
             cam.position.set(cam.viewportWidth / 2.0f, cam.viewportHeight / 2.0f, 0.0f);
         }
-        LockscreenRenderer renderer = new LockscreenRenderer(this.context, this.wallpaperDiskPath, this.wallpaperConfig, this.assetManager, this.debugCamera, this.spriteBatch, this.keyguardManager, this.mainHandler);
-        this.lockscreenRenderer = renderer;
-        renderer.create();
+        initVfx();
+    }
+
+    private void initVfx() {
+        VfxWater water = new VfxWater(this.wallpaperDiskPath);
+        this.vfxWater = water;
+        water.create();
+        VfxParticleRenderer renderer = new VfxParticleRenderer(this.context, this.assetManager, this.wallpaperDiskPath);
+        this.vfxParticleRenderer = renderer;
+        try {
+            renderer.create();
+        } catch (Exception e2) {
+            Log.e("SceneAppListener", "create", e2);
+        }
+        
+        String wallpaperId = WallpaperSelectionManager.getWallpaperIdFromPath(this.wallpaperDiskPath);
+        SharedPreferences vfxPrefs = this.context.getSharedPreferences("vfx_settings", Context.MODE_PRIVATE);
+        
+        // Load active touch VFX
+        String touchVfxName = vfxPrefs.getString("touch_vfx_name_" + wallpaperId, "water");
+        this.activeTouchVfx = VfxLibrary.getByName(touchVfxName);
+        if (!this.activeTouchVfx.isEmpty() && !this.activeTouchVfx.isWaterVfx) {
+            this.vfxParticleRenderer.loadTouchParticle(this.activeTouchVfx);
+        }
+        this.touchRippleEnabled = vfxPrefs.getBoolean("touch_ripple_enabled_" + wallpaperId, true);
+
+        // Load active overlay VFX
+        String overlayVfxName = vfxPrefs.getString("overlay_vfx_name_" + wallpaperId, "none");
+        this.activeOverlayVfx = VfxLibrary.getByName(overlayVfxName);
+        if (!this.activeOverlayVfx.isEmpty()) {
+            this.vfxParticleRenderer.loadBackgroundParticle(this.activeOverlayVfx);
+        }
+
+        LockscreenRenderer lockscreenRenderer = new LockscreenRenderer(this.context, this.wallpaperDiskPath, this.wallpaperConfig, this.assetManager, this.debugCamera, this.spriteBatch, this.keyguardManager, this.mainHandler);
+        this.lockscreenRenderer = lockscreenRenderer;
+        lockscreenRenderer.create();
+    }
+
+    public void setTouchVfx(VfxParticle vfx) {
+        this.activeTouchVfx = vfx;
+        if (vfx.isWaterVfx) {
+            this.touchRippleEnabled = true;
+        } else {
+            this.touchRippleEnabled = false;
+        }
+        
+        // Load the particle if it's not water
+        if (!vfx.isWaterVfx && !vfx.isEmpty()) {
+            this.vfxParticleRenderer.loadTouchParticle(vfx);
+        }
+        
+        String wallpaperId = WallpaperSelectionManager.getWallpaperIdFromPath(this.wallpaperDiskPath);
+        this.context.getSharedPreferences("vfx_settings", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("touch_ripple_enabled_" + wallpaperId, vfx.isWaterVfx)
+            .putString("touch_vfx_name_" + wallpaperId, vfx.name)
+            .apply();
+        Log.d("BaseAppListener", "touchVfx set to " + vfx.name + " for " + wallpaperId);
+    }
+
+    public void setOverlayVfx(VfxParticle vfx) {
+        this.activeOverlayVfx = vfx;
+        this.vfxParticleRenderer.loadBackgroundParticle(vfx);
+        
+        String wallpaperId = WallpaperSelectionManager.getWallpaperIdFromPath(this.wallpaperDiskPath);
+        this.context.getSharedPreferences("vfx_settings", Context.MODE_PRIVATE)
+            .edit()
+            .putString("overlay_vfx_name_" + wallpaperId, vfx.name)
+            .apply();
+        Log.d("BaseAppListener", "overlayVfx set to " + vfx.name + " for " + wallpaperId);
+    }
+    
+    // Maintain old setter for binary compatibility if needed
+    public void setTouchRippleEnabled(boolean enabled) {
+        if (enabled) {
+            setTouchVfx(VfxLibrary.WATER_VFX);
+        } else {
+            setTouchVfx(VfxParticle.EMPTY);
+        }
     }
 
     protected void disableFps() {
@@ -265,7 +354,39 @@ public class BaseAppListener implements ApplicationListener, AndroidWallpaperLis
 
     public void onTouchEvent(MotionEvent motionEvent) {
         try {
-            this.vfxWater.addRipple(motionEvent.getX(), motionEvent.getY());
+            if (this.vfxWater != null && this.vfxParticleRenderer != null) {
+                int action = motionEvent.getAction();
+                float x = motionEvent.getX();
+                float y = motionEvent.getY();
+
+                if (this.activeTouchVfx.isWaterVfx) {
+                    if (action == MotionEvent.ACTION_DOWN) {
+                        this.hasLastWater = true;
+                        this.lastWaterX = x;
+                        this.lastWaterY = y;
+                        this.vfxWater.addRipple(x, y);
+                    } else if (action == MotionEvent.ACTION_MOVE && this.hasLastWater) {
+                        float dx = x - this.lastWaterX;
+                        float dy = y - this.lastWaterY;
+                        float dist = (float) Math.sqrt(dx * dx + dy * dy);
+                        float step = 30.0f; // Density of ripples
+                        if (dist > step) {
+                            int steps = (int) (dist / step);
+                            for (int i = 1; i <= steps; i++) {
+                                this.vfxWater.addRipple(this.lastWaterX + (dx * i / steps), this.lastWaterY + (dy * i / steps));
+                            }
+                        } else {
+                            this.vfxWater.addRipple(x, y);
+                        }
+                        this.lastWaterX = x;
+                        this.lastWaterY = y;
+                    } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                        this.hasLastWater = false;
+                    }
+                } else if (!this.activeTouchVfx.isEmpty()) {
+                    this.vfxParticleRenderer.onTouchEvent(motionEvent);
+                }
+            }
         } catch (Exception e2) {
             Log.e("SceneAppListener", "onTouchEvent - water", e2);
         }

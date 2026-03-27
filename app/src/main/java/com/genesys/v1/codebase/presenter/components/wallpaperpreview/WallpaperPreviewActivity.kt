@@ -22,6 +22,14 @@ import com.wave.livewallpaper.libgdx.GenericAppListener
 import com.wave.livewallpaper.libgdx.LibGdxLiveWallpaper
 import com.wave.livewallpaper.libgdx.LibGdxLiveWallpaperAlternate
 import com.wave.livewallpaper.WallpaperSelectionManager
+import com.wave.livewallpaper.WallpaperSelectionManager.getWallpaperIdFromPath
+import com.wave.livewallpaper.data.LiveWallpaperConfigReader
+import com.wave.livewallpaper.data.LiveWallpaperConfigReader.readSceneConfig
+import com.wave.livewallpaper.data.SceneConfig
+import com.wave.livewallpaper.util.Utility
+import androidx.core.content.edit
+import com.wave.livewallpaper.vfx.VfxLibrary
+import com.wave.livewallpaper.vfx.VfxParticle
 
 class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication.Callbacks {
 
@@ -83,6 +91,69 @@ class WallpaperPreviewActivity : AppCompatActivity(), AndroidFragmentApplication
     private fun setupButtons() {
         findViewById<View>(R.id.btnBack).setOnClickListener {
             onBackPressedDispatcher.onBackPressed()
+        }
+
+        val wallpaperPath = intent.getStringExtra(EXTRA_WALLPAPER_PATH) ?: ""
+        val wallpaperId = getWallpaperIdFromPath(wallpaperPath)
+        val vfxPrefs = getSharedPreferences("vfx_settings", Context.MODE_PRIVATE)
+        val initialRippleEnabled = vfxPrefs.getBoolean("touch_ripple_enabled_$wallpaperId", true)
+
+        val swVfxOption = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvTouchVfx)
+        val vfxOptions = listOf(
+            TouchVfxOption("none", getString(R.string.vfx_none), VfxParticle.EMPTY, R.drawable.ic_launcher_foreground),
+            TouchVfxOption("water", getString(R.string.vfx_water), VfxLibrary.WATER_VFX, R.drawable.ic_launcher_foreground),
+            TouchVfxOption("snow", getString(R.string.vfx_snow), VfxLibrary.SNOW_VFX, R.drawable.ic_launcher_foreground),
+            TouchVfxOption("usa", getString(R.string.vfx_usa), VfxLibrary.USA_VFX, R.drawable.ic_launcher_foreground)
+        )
+        // Find current selected from prefs
+        val currentVfxName = vfxPrefs.getString("touch_vfx_name_$wallpaperId", "water") ?: "water"
+        val isWaterEnabled = vfxPrefs.getBoolean("touch_ripple_enabled_$wallpaperId", true)
+        val initialId = if (currentVfxName == "" || (currentVfxName == "water" && !isWaterEnabled)) "none" else currentVfxName
+
+        val adapter = TouchVfxAdapter(vfxOptions, initialId) { option ->
+            // Save to prefs
+            val isWater = option.id == "water"
+            vfxPrefs.edit {
+                putBoolean("touch_ripple_enabled_$wallpaperId", isWater)
+                putString("touch_vfx_name_$wallpaperId", if (option.id == "none") "" else option.id)
+            }
+            
+            // Update running listener
+            gdxFragment?.let { fragment ->
+                try {
+                    val listener = (com.badlogic.gdx.Gdx.app.applicationListener as? GenericAppListener)?.getDelegate()
+                    listener?.setTouchVfx(option.vfx)
+                } catch (e: Exception) {
+                    Log.e("Number4", "Failed to update ripple setting", e)
+                }
+            }
+        }
+        swVfxOption.adapter = adapter
+
+        // Overlay VFX Selection
+        val rvOverlayVfx = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvOverlayVfx)
+        val overlayOptions = listOf(
+            TouchVfxOption("none", getString(R.string.vfx_none), VfxParticle.EMPTY, R.drawable.ic_launcher_foreground),
+            TouchVfxOption("love", getString(R.string.vfx_love), VfxLibrary.LOVE_VFX, R.drawable.ic_launcher_foreground),
+            TouchVfxOption("windowrain", getString(R.string.vfx_windowrain), VfxLibrary.WINDOWRAIN_VFX, R.drawable.ic_launcher_foreground)
+        )
+        val currentOverlayName = vfxPrefs.getString("overlay_vfx_name_$wallpaperId", "none") ?: "none"
+        
+        rvOverlayVfx.adapter = TouchVfxAdapter(overlayOptions, currentOverlayName) { option ->
+            // Save to prefs
+            vfxPrefs.edit {
+                putString("overlay_vfx_name_$wallpaperId", option.id)
+            }
+            
+            // Update running listener
+            gdxFragment?.let { fragment ->
+                try {
+                    val listener = (com.badlogic.gdx.Gdx.app.applicationListener as? GenericAppListener)?.getDelegate()
+                    listener?.setOverlayVfx(option.vfx)
+                } catch (e: Exception) {
+                    Log.e("VfxPreview", "Failed to update overlay vfx", e)
+                }
+            }
         }
 
         findViewById<View>(R.id.btnApplyWallpaper).setOnClickListener {

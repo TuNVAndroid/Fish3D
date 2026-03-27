@@ -24,4 +24,13 @@
     <string name="format_g3db">G3DB</string>
     <string name="test_fish_title">Test Fish Lab</string>
     <string name="test_fish_subtitle">Prototype set • Custom assets</string>
+    <string name="water_ripple_effect">Water Ripple Effect</string>
+    <string name="touch_vfx_selection">Touch Effects (VFX)</string>
+    <string name="overlay_vfx_selection">Overlay Effects</string>
+    <string name="vfx_none">None</string>
+    <string name="vfx_water">Water</string>
+    <string name="vfx_snow">Snow</string>
+    <string name="vfx_usa">USA</string>
+    <string name="vfx_love">Love Hearts</string>
+    <string name="vfx_windowrain">Rainy Day</string>
 </resources>

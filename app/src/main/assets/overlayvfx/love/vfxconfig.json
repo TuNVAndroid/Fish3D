@@ -1,0 +1,10 @@
+{
+  "fileName": "particle.p",
+  "emitInSequence": false,
+  "randomizeEmitters": false,
+  "cooldown": {
+    "minDistanceBetweenTouches": 25,
+    "minTimeBetweenTouches": 0.3
+  },
+  "isPostProcessing": false
+}
